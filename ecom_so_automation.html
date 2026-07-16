@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-com SO Automation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 20px 32px; display: flex; align-items: center; gap: 14px;
+    border-bottom: 3px solid #e94560;
+  }
+  header .logo {
+    width: 38px; height: 38px; background: #e94560; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: white; font-weight: 800;
+  }
+  header h1 { color: white; font-size: 20px; font-weight: 700; }
+  header p  { color: #8892b0; font-size: 13px; margin-top: 2px; }
+
+  .container { max-width: 920px; margin: 32px auto; padding: 0 20px; }
+
+  .card {
+    background: white; border-radius: 16px; padding: 28px 32px;
+    margin-bottom: 20px; box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    border: 1px solid #e8eaf0;
+  }
+
+  .card-title {
+    font-size: 13px; font-weight: 700; color: #8892b0;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .step {
+    width: 24px; height: 24px; background: #e94560; color: white;
+    border-radius: 50%; font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .row.three { grid-template-columns: 1fr 1fr 1fr; }
+
+  .field label {
+    display: block; font-size: 12px; font-weight: 600; color: #555;
+    margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .field input[type="text"], .field input[type="date"], .field select {
+    width: 100%; padding: 10px 14px; border: 2px solid #e8eaf0;
+    border-radius: 10px; font-size: 14px; color: #1a1a2e;
+    background: #fafafa; transition: border-color 0.2s; outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: #e94560; background: white; }
+
+  .drop-zone {
+    border: 2px dashed #d0d4e0; border-radius: 12px; padding: 24px 20px;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: #fafafa;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #e94560; background: #fff5f7; }
+  .drop-zone.has-file { border-color: #00c896; background: #f0fdf8; }
+  .drop-zone input { display: none; }
+  .drop-zone .icon { font-size: 26px; margin-bottom: 6px; }
+  .drop-zone .label { font-size: 13px; font-weight: 600; color: #555; }
+  .drop-zone .sub   { font-size: 11px; color: #999; margin-top: 3px; }
+  .drop-zone .filename { font-size: 12px; color: #00c896; font-weight: 600; margin-top: 6px; }
+
+  .hint-box {
+    background: #fffbea; border: 1px solid #f6d860; border-radius: 10px;
+    padding: 12px 16px; font-size: 12px; color: #7a6000; margin-top: 14px;
+    line-height: 1.7;
+  }
+  .hint-box strong { color: #5a4500; }
+
+  .run-btn {
+    width: 100%; padding: 16px; background: linear-gradient(135deg, #e94560, #c73652);
+    color: white; border: none; border-radius: 12px; font-size: 16px;
+    font-weight: 700; cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
+  }
+  .run-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(233,69,96,0.35); }
+  .run-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .progress-wrap {
+    display: none; margin-top: 14px; background: #f0f2f5;
+    border-radius: 10px; overflow: hidden; height: 8px;
+  }
+  .progress-bar {
+    height: 100%; background: linear-gradient(90deg, #e94560, #ff8fa3);
+    width: 0%; transition: width 0.4s ease; border-radius: 10px;
+  }
+
+  .log-box {
+    display: none; margin-top: 14px; background: #1a1a2e; border-radius: 12px;
+    padding: 14px 18px; font-family: monospace; font-size: 12px;
+    color: #cdd9f5; line-height: 1.9; max-height: 220px; overflow-y: auto;
+  }
+
+  .results {
+    display: none; background: #f0fdf8; border: 2px solid #00c896;
+    border-radius: 16px; padding: 24px 28px; margin-top: 20px;
+  }
+  .results h3 { color: #00a878; font-size: 16px; margin-bottom: 16px; }
+
+  .stats { display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat {
+    background: white; border-radius: 10px; padding: 14px 20px;
+    flex: 1; min-width: 110px; text-align: center; border: 1px solid #d0f0e8;
+  }
+  .stat .num { font-size: 26px; font-weight: 800; color: #00a878; }
+  .stat .lbl { font-size: 11px; color: #666; margin-top: 2px; font-weight: 600; }
+  .stat.na .num { color: #e94560; }
+
+  .dl-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+  .dl-btn {
+    padding: 11px 22px; border-radius: 10px; font-size: 13px;
+    font-weight: 700; cursor: pointer; border: none; transition: all 0.2s;
+  }
+  .dl-btn.primary { background: #00c896; color: white; }
+  .dl-btn.primary:hover { background: #00a878; }
+  .dl-btn.secondary { background: white; color: #555; border: 2px solid #d0d4e0; }
+  .dl-btn.secondary:hover { border-color: #999; }
+
+  .error-msg {
+    display: none; background: #fff0f3; border: 2px solid #e94560;
+    border-radius: 12px; padding: 14px 18px; margin-top: 14px;
+    color: #c73652; font-size: 13px; font-weight: 600;
+  }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 5px;
+    font-size: 10px; font-weight: 700; background: #e94560; color: white;
+    vertical-align: middle; margin-left: 6px;
+  }
+  .tag.green { background: #00c896; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SO</div>
+  <div>
+    <h1>E-com SO Automation</h1>
+    <p>Upload Allocation + SO Tab export → Get CUS SO CSV instantly</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- STEP 1 -->
+  <div class="card">
+    <div class="card-title"><span class="step">1</span> Upload Files</div>
+    <div class="row">
+
+      <div class="field">
+        <label>Allocation File <span class="tag">Excel</span></label>
+        <div class="drop-zone" id="dz-alloc" onclick="document.getElementById('f-alloc').click()">
+          <input type="file" id="f-alloc" accept=".xlsx,.xls">
+          <div class="icon">📋</div>
+          <div class="label">Drop Allocation Excel here</div>
+          <div class="sub">BLR_XD_Allocation_*.xlsx</div>
+          <div class="filename" id="fn-alloc"></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>E.com SO Tab Export <span class="tag green">CSV or Excel</span></label>
+        <div class="drop-zone" id="dz-so" onclick="document.getElementById('f-so').click()">
+          <input type="file" id="f-so" accept=".xlsx,.xls,.csv">
+          <div class="icon">📊</div>
+          <div class="label">Drop SO Tab export here</div>
+          <div class="sub">BLR FK GRO SO tab (CSV or Excel)</div>
+          <div class="filename" id="fn-so"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="hint-box">
+      💡 <strong>How to export the SO tab daily:</strong>
+      Open G-sheet → click <strong>BLR FK GRO SO</strong> tab → File → Download → 
+      <strong>CSV (.csv)</strong> or Excel → upload it above
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="card">
+    <div class="card-title"><span class="step">2</span> Configuration</div>
+    <div class="row three">
+      <div class="field">
+        <label>City</label>
+        <select id="city">
+          <option value="Bangalore">Bangalore (NCXDB)</option>
+          <option value="Chennai">Chennai (NCXDC)</option>
+          <option value="Mumbai">Mumbai (NCXDM)</option>
+          <option value="Hyderabad">Hyderabad (NCXDH)</option>
+          <option value="Trichy">Trichy (NCXDT)</option>
+          <option value="Coimbatore">Coimbatore (NCXDCBE)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Delivery Date</label>
+        <input type="date" id="delivery-date">
+      </div>
+      <div class="field">
+        <label>SO Tab Name (if Excel)</label>
+        <input type="text" id="so-sheet-name" placeholder="e.g. BLR FK GRO SO" value="BLR FK GRO SO">
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="card">
+    <button class="run-btn" id="run-btn" onclick="runAutomation()">⚡ Run Automation</button>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="log-box" id="log-box"></div>
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results" id="results">
+    <h3>✅ Files ready to download</h3>
+    <div class="stats">
+      <div class="stat"><div class="num" id="stat-total">-</div><div class="lbl">Total SO Rows</div></div>
+      <div class="stat"><div class="num" id="stat-valid">-</div><div class="lbl">Valid Rows (CSV)</div></div>
+      <div class="stat na"><div class="num" id="stat-na">-</div><div class="lbl">NA Rows (2nd Tab)</div></div>
+      <div class="stat"><div class="num" id="stat-po">-</div><div class="lbl">PO IDs Generated</div></div>
+    </div>
+    <div class="dl-btns">
+      <button class="dl-btn primary" id="dl-csv">⬇ Download CSV</button>
+      <button class="dl-btn secondary" id="dl-xlsx">⬇ Download Excel (Valid + NA tabs)</button>
+      <button class="dl-btn secondary" id="dl-po">⬇ Download PO Key Mapping</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────
+let allocWB = null, soData = null;
+
+const CITY_CONFIG = {
+  Bangalore:  { prefix: 'NCXDB',   cityId: 2, allocName: 'Bangalore', custName: 'BLR FK Customers' },
+  Chennai:    { prefix: 'NCXDC',   cityId: 3, allocName: 'Chennai',   custName: 'CHN FK Customers' },
+  Mumbai:     { prefix: 'NCXDM',   cityId: 4, allocName: 'Mumbai',    custName: 'MUM FK Customers' },
+  Hyderabad:  { prefix: 'NCXDH',   cityId: 5, allocName: 'Hyderabad', custName: 'HYD FK Customers' },
+  Trichy:     { prefix: 'NCXDT',   cityId: 6, allocName: 'Trichy',    custName: 'Trichy FK Customers' },
+  Coimbatore: { prefix: 'NCXDCBE', cityId: 7, allocName: 'Coimbatore',custName: 'Coimbatore FK customer' },
+};
+
+const OUTPUT_COLS = [
+  'customer_contact_number(req)', 'NC ID', 'NC Name', 'QTY', 'Date',
+  'lot weight ID', 'ordering_mode(optional)',
+  'cancelled (optional)By default should be 0', 'purchaseOrder',
+  'Sales Price', 'DELIVERY_CHARGE(opt)', 'CITY_ID(req)',
+  'sale_order_id(optional- leave empty)', 'sub_type (optional- leave empty)',
+  'CategoryId (if empty then default is 1)', 'grocerFlow'
+];
+
+const NA_CHECK_COLS = ['FSN', 'NC ID', 'Sales Price', 'lot weight ID', 'customer_contact_number(req)'];
+
+// ── Drop zones ────────────────────────────────────────────────────
+function setupDrop(dzId, inputId, fnId, onLoad) {
+  const dz  = document.getElementById(dzId);
+  const inp = document.getElementById(inputId);
+  inp.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0], dz, fnId, onLoad); });
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0], dz, fnId, onLoad);
+  });
+}
+
+function loadFile(file, dz, fnId, onLoad) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
+    let result;
+    if (isCsv) {
+      // Parse CSV as text
+      const text = new TextDecoder().decode(e.target.result);
+      const wb   = XLSX.read(text, { type: 'string', raw: false });
+      result = { wb, isCsv: true, name: file.name };
+    } else {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true, raw: false });
+      result = { wb, isCsv: false, name: file.name };
+    }
+    onLoad(result);
+    dz.classList.add('has-file');
+    document.getElementById(fnId).textContent = '✓ ' + file.name;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+setupDrop('dz-alloc', 'f-alloc', 'fn-alloc', r => { allocWB = r.wb; });
+setupDrop('dz-so',    'f-so',    'fn-so',    r => { soData  = r;    });
+
+// ── City select → auto-update SO sheet name hint ──────────────────
+const soSheetMap = {
+  Bangalore: 'BLR FK GRO SO', Chennai: 'CHN FK GRO SO',
+  Mumbai: 'MUM FK GRO SO', Hyderabad: 'HYD FK GRO SO',
+  Trichy: 'Trichy FK GRO SO', Coimbatore: 'CBE FK GRO SO',
+};
+document.getElementById('city').addEventListener('change', function() {
+  document.getElementById('so-sheet-name').value = soSheetMap[this.value] || '';
+});
+
+// ── Default date = today ──────────────────────────────────────────
+document.getElementById('delivery-date').valueAsDate = new Date();
+
+// ── Helpers ───────────────────────────────────────────────────────
+function log(msg) {
+  const b = document.getElementById('log-box');
+  b.style.display = 'block';
+  b.innerHTML += `<div>${msg}</div>`;
+  b.scrollTop = b.scrollHeight;
+}
+function setProgress(p) {
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('progress-bar').style.width = p + '%';
+}
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.style.display = 'block'; el.textContent = '⚠ ' + msg;
+}
+function clearUI() {
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('log-box').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('progress-wrap').style.display = 'none';
+  document.getElementById('progress-bar').style.width = '0%';
+}
+
+function fmtContact(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseFloat(String(v));
+  if (!isNaN(n) && Math.abs(n) > 1e8) return String(Math.round(n));
+  return String(v).replace(/\.0+$/, '').trim();
+}
+
+function fmtDate(v, fallback) {
+  if (!v) return fallback;
+  const s = String(v).trim();
+  if (s.match(/^\d{2}-\d{2}-\d{4}$/)) return s;
+  if (s.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const [y,m,d] = s.split(/[-T]/); return `${d}-${m}-${y}`;
+  }
+  try {
+    const d = new Date(v);
+    if (!isNaN(d)) {
+      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    }
+  } catch(e) {}
+  return fallback;
+}
+
+function isNaRow(row) {
+  return NA_CHECK_COLS.some(col => {
+    const v = row[col];
+    return v === null || v === undefined || String(v).trim() === '' || String(v).toLowerCase() === 'null';
+  });
+}
+
+function getSheetRows(wb, sheetName) {
+  // Try exact name first, then case-insensitive
+  let name = wb.SheetNames.find(s => s === sheetName)
+          || wb.SheetNames.find(s => s.toLowerCase() === sheetName.toLowerCase())
+          || wb.SheetNames[0];
+  return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null, raw: false });
+}
+
+function downloadBlob(url, filename) {
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+}
+
+// ── Main ──────────────────────────────────────────────────────────
+async function runAutomation() {
+  clearUI();
+
+  const city        = document.getElementById('city').value;
+  const dateVal     = document.getElementById('delivery-date').value;
+  const soSheetName = document.getElementById('so-sheet-name').value.trim() || soSheetMap[city];
+
+  if (!dateVal)   { showError('Please select a delivery date.'); return; }
+  if (!allocWB)   { showError('Please upload the Allocation Excel file.'); return; }
+  if (!soData)    { showError('Please upload the SO tab export (CSV or Excel).'); return; }
+
+  const cfg = CITY_CONFIG[city];
+  const [y,m,d] = dateVal.split('-');
+  const deliveryDate = `${d}-${m}-${y}`;
+  const dateTag = `${d}${m}${y}`;
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  setProgress(10);
+  log(`▶ <b>${city}</b> | PO Prefix: <b>${cfg.prefix}</b> | Date: <b>${deliveryDate}</b>`);
+
+  try {
+    // ── 1. Read Allocation ───────────────────────────────────────
+    log('► [1/4] Reading Allocation PO sheet...');
+    setProgress(20);
+
+    const allocRows = getSheetRows(allocWB, 'PO');
+    if (!allocRows.length) throw new Error('Sheet "PO" not found or empty in Allocation file.');
+
+    // Detect format: processed (Warehouse col, no City) vs raw (City + Store Site ID)
+    const firstRow = allocRows[0];
+    const isProcessed = !('City' in firstRow) && ('Warehouse' in firstRow);
+    let cityRows;
+
+    if (isProcessed) {
+      log(`       Detected processed format — using all ${allocRows.length} rows directly`);
+      cityRows = allocRows.map(r => ({
+        'Store Site ID': String(r['Warehouse'] || '').trim(),
+        'Supplier ID':   String(r['Supplier ID'] || '').trim(),
+        'Store ID':      String(r['Store'] || '').trim(),
+        'FSN':           String(r['FSN'] || '').trim(),
+        'FSN_Title':     String(r['FSN_Title'] || r['Title'] || r['NC Name'] || '').trim(),
+        'QTY':           r['QTY'],
+      }));
+    } else {
+      cityRows = allocRows.filter(r => String(r['City'] || '').trim().toLowerCase() === cfg.allocName.toLowerCase());
+      if (!cityRows.length) cityRows = allocRows.filter(r => String(r['City'] || '').toLowerCase().includes(cfg.allocName.toLowerCase().slice(0,4)));
+      if (!cityRows.length) {
+        const uc = [...new Set(allocRows.map(r => String(r['City']||'').trim()).filter(Boolean))];
+        if (uc.length === 1) { log(`       ⚠ Using all rows (city in file: "${uc[0]}")`); cityRows = allocRows; }
+        else throw new Error(`No rows for "${cfg.allocName}". Cities in file: ${uc.join(', ')}`);
+      }
+      cityRows = cityRows.map(r => ({
+        'Store Site ID': String(r['Store Site ID'] || r['Warehouse'] || '').trim(),
+        'Supplier ID':   String(r['Supplier ID']   || '').trim(),
+        'Store ID':      String(r['Store ID']      || r['Store'] || '').trim(),
+        'FSN':           String(r['FSN'] || '').trim(),
+        'FSN_Title':     String(r['FSN_Title'] || r['Title'] || r['NC Name'] || '').trim(),
+        'QTY':           r['QTY'] || r['Quantity'] || r['Qty'],
+      }));
+    }
+    log(`       ${cityRows.length} rows for ${city}`);
+
+    // ── 2. Build Key → PO ID map
+    log('► [2/4] Generating PO IDs...');
+    setProgress(35);
+
+    const keyOrder = [], keySet = new Set();
+    for (const r of cityRows) {
+      const wh  = String(r['Store Site ID'] || '').trim();
+      const sup = String(r['Supplier ID']   || '').trim();
+      const key = wh + sup;
+      if (!keySet.has(key)) {
+        keySet.add(key);
+        keyOrder.push({ key, wh, sup, storeId: String(r['Store ID'] || '').trim() });
+      }
+    }
+
+    const keyToPO = {};
+    keyOrder.forEach(({ key }, i) => {
+      keyToPO[key] = `${cfg.prefix}${String(i + 1).padStart(3, '0')}`;
+    });
+    log(`       ${keyOrder.length} unique PO IDs → <b>${cfg.prefix}001</b> to <b>${cfg.prefix}${String(keyOrder.length).padStart(3,'0')}</b>`);
+
+    // Pre-assign PO ID to city rows for zipping
+    for (const r of cityRows) {
+      const key = r['Store Site ID'] + r['Supplier ID'];
+      r['PO_ID'] = keyToPO[key] || '';
+    }
+
+    // ── Build Store → Contact Map from Customers Tab ─────────────
+    log('► [3/5] Building Store → Contact VLOOKUP map...');
+    setProgress(45);
+    
+    let storeToContact = {};
+    const custSheetName = soData.wb.SheetNames.find(s => s.toLowerCase() === cfg.custName.toLowerCase()) || cfg.custName;
+    if (soData.wb.Sheets[custSheetName]) {
+      const custRows = XLSX.utils.sheet_to_json(soData.wb.Sheets[custSheetName], { header: 1 });
+      let mappedCount = 0;
+      for (let i = 1; i < custRows.length; i++) {
+        const storeVal = custRows[i][5];   // Col F
+        const contactVal = custRows[i][6]; // Col G
+        if (storeVal) {
+          storeToContact[String(storeVal).trim()] = contactVal;
+          mappedCount++;
+        }
+      }
+      log(`       ✓ Mapped <b>${mappedCount}</b> stores from "${custSheetName}"`);
+    } else {
+      log(`       ⚠ <span style="color:#f6c90e">Warning: "${cfg.custName}" tab not found in the uploaded workbook. Contact numbers will not be overridden.</span>`);
+    }
+
+    // ── 4. Read SO tab ───────────────────────────────────────────
+    log(`► [4/5] Reading SO data...`);
+    setProgress(60);
+
+    const rawSoRows = soData.isCsv
+      ? getSheetRows(soData.wb, 'Sheet1')
+      : getSheetRows(soData.wb, soSheetName);
+
+    log(`       ${rawSoRows.length} total rows in SO tab`);
+    if (!rawSoRows.length) throw new Error('SO file is empty or columns not recognised.');
+
+    // ── 5. Process + zip rows (Side-by-side exactly like the video) ──
+    log('► [5/5] Zipping rows & applying VLOOKUP...');
+    setProgress(75);
+
+    // Filter out blank QTY rows from SO tab
+    const soRows = rawSoRows.filter(r => {
+      const q = r['QTY'] !== undefined ? String(r['QTY']).trim() : '';
+      return q !== '' && q.toLowerCase() !== 'null';
+    });
+    log(`       ${soRows.length} SO rows remain after filtering out blank QTY`);
+
+    if (cityRows.length !== soRows.length) {
+      log(`       ⚠ <span style="color:#f6c90e">Warning: Allocation rows (${cityRows.length}) and filtered SO rows (${soRows.length}) don't match! Will zip up to ${Math.min(cityRows.length, soRows.length)} rows.</span>`);
+    }
+
+    const validRows = [], naRows = [];
+    const minLength = Math.min(cityRows.length, soRows.length);
+
+    for (let i = 0; i < minLength; i++) {
+      const aRow = cityRows[i];
+      const sRow = soRows[i];
+
+      // Retrieve contact from VLOOKUP if available
+      const storeId = aRow['Store ID'];
+      const vlookupContact = storeToContact[storeId];
+      if (vlookupContact !== undefined) {
+        sRow['customer_contact_number(req)'] = vlookupContact;
+      }
+
+      // Fix contact number formatting
+      if (sRow['customer_contact_number(req)'] != null) {
+        sRow['customer_contact_number(req)'] = fmtContact(sRow['customer_contact_number(req)']);
+      }
+      // Fix date format
+      sRow['Date'] = fmtDate(sRow['Date'], deliveryDate);
+
+      // Build output row with OUTPUT_COLS
+      const out = {};
+      for (const col of OUTPUT_COLS) out[col] = (sRow[col] !== undefined) ? sRow[col] : null;
+
+      // Overwrite with Allocation values (side-by-side zip)
+      out['NC ID'] = aRow['FSN'];
+      out['NC Name'] = aRow['FSN_Title'] || out['NC Name'];
+      out['QTY'] = aRow['QTY'];
+      out['purchaseOrder'] = aRow['PO_ID'];
+
+      // Check NA on the combined data to allow missing fields check
+      const checkRow = { ...sRow, ...out };
+      if (isNaRow(checkRow)) naRows.push(out);
+      else                   validRows.push(out);
+    }
+
+    log(`       ✓ Valid rows : <b>${validRows.length}</b>`);
+    log(`       ✗ NA rows    : <b>${naRows.length}</b>`);
+
+    // ── Generate files ───────────────────────────────────────────
+    setProgress(90);
+
+    // CSV — valid rows only
+    const csvWB  = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(csvWB, XLSX.utils.json_to_sheet(validRows, { header: OUTPUT_COLS }), 'SO Output');
+    const csvBlob = new Blob([XLSX.write(csvWB, { bookType: 'csv', type: 'array' })], { type: 'text/csv' });
+    const csvUrl  = URL.createObjectURL(csvBlob);
+
+    // Excel — valid tab + NA tab
+    const xlWB = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(xlWB, XLSX.utils.json_to_sheet(validRows, { header: OUTPUT_COLS }), 'SO Output');
+    XLSX.utils.book_append_sheet(xlWB,
+      naRows.length > 0
+        ? XLSX.utils.json_to_sheet(naRows, { header: OUTPUT_COLS })
+        : XLSX.utils.aoa_to_sheet([['No NA rows found']]),
+      'NA Rows'
+    );
+    const xlBlob = new Blob([XLSX.write(xlWB, { bookType: 'xlsx', type: 'array' })],
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const xlUrl  = URL.createObjectURL(xlBlob);
+
+    // PO Key Mapping
+    const poMapRows = keyOrder.map(({ key, wh, sup, storeId }, i) => ({
+      'Key': key, 'Warehouse': wh, 'Supplier ID': sup,
+      'Store ID': storeId, 'PO ID': keyToPO[key]
+    }));
+    const poWB   = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(poWB, XLSX.utils.json_to_sheet(poMapRows), 'PO Key Mapping');
+    const poBlob = new Blob([XLSX.write(poWB, { bookType: 'xlsx', type: 'array' })],
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const poUrl  = URL.createObjectURL(poBlob);
+
+    // Wire buttons
+    document.getElementById('dl-csv').onclick  = () => downloadBlob(csvUrl,  `${cfg.prefix}_CUS_SO_${dateTag}.csv`);
+    document.getElementById('dl-xlsx').onclick = () => downloadBlob(xlUrl,   `${cfg.prefix}_CUS_SO_${dateTag}_full.xlsx`);
+    document.getElementById('dl-po').onclick   = () => downloadBlob(poUrl,   `${cfg.prefix}_PO_Key_Mapping_${dateTag}.xlsx`);
+
+    // Stats
+    document.getElementById('stat-total').textContent = soRows.length.toLocaleString();
+    document.getElementById('stat-valid').textContent = validRows.length.toLocaleString();
+    document.getElementById('stat-na').textContent    = naRows.length.toLocaleString();
+    document.getElementById('stat-po').textContent    = keyOrder.length;
+
+    setProgress(100);
+    document.getElementById('results').style.display = 'block';
+    log('✅ <b>Done!</b> Click buttons above to download.');
+
+  } catch (err) {
+    showError(err.message);
+    log('❌ ' + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

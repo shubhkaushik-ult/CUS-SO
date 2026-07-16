@@ -1,0 +1,6 @@
+ecom-so-reader-credetials.json
+__pycache__/
+output/
+*.csv
+*.xlsx
+*.mp4

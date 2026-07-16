@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-com SO Automation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 20px 32px; display: flex; align-items: center; gap: 14px;
+    border-bottom: 3px solid #e94560;
+  }
+  header .logo {
+    width: 38px; height: 38px; background: #e94560; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: white; font-weight: 800;
+  }
+  header h1 { color: white; font-size: 20px; font-weight: 700; }
+  header p  { color: #8892b0; font-size: 13px; margin-top: 2px; }
+
+  .container { max-width: 920px; margin: 32px auto; padding: 0 20px; }
+
+  .card {
+    background: white; border-radius: 16px; padding: 28px 32px;
+    margin-bottom: 20px; box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    border: 1px solid #e8eaf0;
+  }
+
+  .card-title {
+    font-size: 13px; font-weight: 700; color: #8892b0;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .step {
+    width: 24px; height: 24px; background: #e94560; color: white;
+    border-radius: 50%; font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .row.three { grid-template-columns: 1fr 1fr 1fr; }
+
+  .field label {
+    display: block; font-size: 12px; font-weight: 600; color: #555;
+    margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .field input[type="text"], .field input[type="date"], .field select {
+    width: 100%; padding: 10px 14px; border: 2px solid #e8eaf0;
+    border-radius: 10px; font-size: 14px; color: #1a1a2e;
+    background: #fafafa; transition: border-color 0.2s; outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: #e94560; background: white; }
+
+  .drop-zone {
+    border: 2px dashed #d0d4e0; border-radius: 12px; padding: 24px 20px;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: #fafafa;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #e94560; background: #fff5f7; }
+  .drop-zone.has-file { border-color: #00c896; background: #f0fdf8; }
+  .drop-zone input { display: none; }
+  .drop-zone .icon { font-size: 26px; margin-bottom: 6px; }
+  .drop-zone .label { font-size: 13px; font-weight: 600; color: #555; }
+  .drop-zone .sub   { font-size: 11px; color: #999; margin-top: 3px; }
+  .drop-zone .filename { font-size: 12px; color: #00c896; font-weight: 600; margin-top: 6px; }
+
+  .hint-box {
+    background: #fffbea; border: 1px solid #f6d860; border-radius: 10px;
+    padding: 12px 16px; font-size: 12px; color: #7a6000; margin-top: 14px;
+    line-height: 1.7;
+  }
+  .hint-box strong { color: #5a4500; }
+
+  .run-btn {
+    width: 100%; padding: 16px; background: linear-gradient(135deg, #e94560, #c73652);
+    color: white; border: none; border-radius: 12px; font-size: 16px;
+    font-weight: 700; cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
+  }
+  .run-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(233,69,96,0.35); }
+  .run-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .progress-wrap {
+    display: none; margin-top: 14px; background: #f0f2f5;
+    border-radius: 10px; overflow: hidden; height: 8px;
+  }
+  .progress-bar {
+    height: 100%; background: linear-gradient(90deg, #e94560, #ff8fa3);
+    width: 0%; transition: width 0.4s ease; border-radius: 10px;
+  }
+
+  .log-box {
+    display: none; margin-top: 14px; background: #1a1a2e; border-radius: 12px;
+    padding: 14px 18px; font-family: monospace; font-size: 12px;
+    color: #cdd9f5; line-height: 1.9; max-height: 220px; overflow-y: auto;
+  }
+
+  .results {
+    display: none; background: #f0fdf8; border: 2px solid #00c896;
+    border-radius: 16px; padding: 24px 28px; margin-top: 20px;
+  }
+  .results h3 { color: #00a878; font-size: 16px; margin-bottom: 16px; }
+
+  .stats { display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat {
+    background: white; border-radius: 10px; padding: 14px 20px;
+    flex: 1; min-width: 110px; text-align: center; border: 1px solid #d0f0e8;
+  }
+  .stat .num { font-size: 26px; font-weight: 800; color: #00a878; }
+  .stat .lbl { font-size: 11px; color: #666; margin-top: 2px; font-weight: 600; }
+  .stat.na .num { color: #e94560; }
+
+  .dl-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+  .dl-btn {
+    padding: 11px 22px; border-radius: 10px; font-size: 13px;
+    font-weight: 700; cursor: pointer; border: none; transition: all 0.2s;
+  }
+  .dl-btn.primary { background: #00c896; color: white; }
+  .dl-btn.primary:hover { background: #00a878; }
+  .dl-btn.secondary { background: white; color: #555; border: 2px solid #d0d4e0; }
+  .dl-btn.secondary:hover { border-color: #999; }
+
+  .error-msg {
+    display: none; background: #fff0f3; border: 2px solid #e94560;
+    border-radius: 12px; padding: 14px 18px; margin-top: 14px;
+    color: #c73652; font-size: 13px; font-weight: 600;
+  }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 5px;
+    font-size: 10px; font-weight: 700; background: #e94560; color: white;
+    vertical-align: middle; margin-left: 6px;
+  }
+  .tag.green { background: #00c896; }
+  .tag.teal  { background: #0891b2; }
+
+  /* ── Tab switcher ── */
+  .tab-bar {
+    display: flex; gap: 0; background: #f0f2f5;
+    border-bottom: 2px solid #e8eaf0; padding: 0 20px;
+    max-width: 920px; margin: 0 auto;
+  }
+  .tab-btn {
+    padding: 14px 28px; font-size: 14px; font-weight: 700;
+    color: #8892b0; background: none; border: none; cursor: pointer;
+    border-bottom: 3px solid transparent; margin-bottom: -2px;
+    transition: all 0.2s; letter-spacing: 0.3px;
+  }
+  .tab-btn:hover { color: #1a1a2e; }
+  .tab-btn.active { color: #e94560; border-bottom-color: #e94560; }
+  .tab-btn.active.fnv { color: #0891b2; border-bottom-color: #0891b2; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* FnV accent overrides */
+  .fnv-accent .run-btn { background: linear-gradient(135deg, #0891b2, #0e7490); }
+  .fnv-accent .run-btn:hover { box-shadow: 0 6px 20px rgba(8,145,178,0.35); }
+  .fnv-accent .progress-bar { background: linear-gradient(90deg, #0891b2, #67e8f9); }
+  .fnv-accent .results { border-color: #0891b2; background: #f0f9ff; }
+  .fnv-accent .results h3 { color: #0891b2; }
+  .fnv-accent .stat .num { color: #0891b2; }
+  .fnv-accent .dl-btn.primary { background: #0891b2; }
+  .fnv-accent .dl-btn.primary:hover { background: #0e7490; }
+  .fnv-accent .card-title .step { background: #0891b2; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SO</div>
+  <div>
+    <h1>E-com SO Automation</h1>
+    <p>Upload Allocation + SO Tab export → Get CUS SO CSV instantly</p>
+  </div>
+</header>
+
+<!-- Tab Switcher -->
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-gro-btn" onclick="switchTab('gro')">🛒 Grocery SO</button>
+  <button class="tab-btn fnv" id="tab-fnv-btn" onclick="switchTab('fnv')">🥦 FnV SO</button>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════════ GROCERY TAB ═══════════════════ -->
+<div class="tab-panel active" id="tab-gro">
+  <!-- STEP 1 -->
+  <div class="card">
+    <div class="card-title"><span class="step">1</span> Upload Files</div>
+    <div class="row">
+
+      <div class="field">
+        <label>Allocation File <span class="tag">Excel</span></label>
+        <div class="drop-zone" id="dz-alloc" onclick="document.getElementById('f-alloc').click()">
+          <input type="file" id="f-alloc" accept=".xlsx,.xls">
+          <div class="icon">📋</div>
+          <div class="label">Drop Allocation Excel here</div>
+          <div class="sub">BLR_XD_Allocation_*.xlsx</div>
+          <div class="filename" id="fn-alloc"></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Google Sheet URL <span class="tag green">Service Account Auth</span></label>
+        <input type="text" id="gsheet-url" placeholder="https://docs.google.com/spreadsheets/d/.../edit" style="margin-top: 10px;">
+        <div style="font-size: 11px; color: #999; margin-top: 6px;">The E.com SO tab will be fetched securely via Google API.</div>
+      </div>
+
+    </div>
+
+    <div class="hint-box">
+      💡 <strong>No need to download CSVs!</strong> Just paste the Google Sheet URL. Ensure your Service Account has Viewer access to the sheet.
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="card">
+    <div class="card-title"><span class="step">2</span> Configuration</div>
+    <div class="row">
+      <div class="field">
+        <label>City</label>
+        <select id="city">
+          <option value="Bangalore">Bangalore (NCXDB)</option>
+          <option value="Chennai">Chennai (NCXDC)</option>
+          <option value="Mumbai">Mumbai (NCXDM)</option>
+          <option value="Hyderabad">Hyderabad (NCXDH)</option>
+          <option value="Trichy">Trichy (NCXDT)</option>
+          <option value="Coimbatore">Coimbatore (NCXDCBE)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Delivery Date</label>
+        <input type="date" id="delivery-date">
+      </div>
+    </div>
+    <div class="row" style="margin-top: 20px;">
+      <div class="field">
+        <label>SO Tab Name</label>
+        <input type="text" id="so-sheet-name" placeholder="e.g. BLR FK GRO SO" value="BLR FK GRO SO">
+      </div>
+      <div class="field">
+        <label>PO Tab Name</label>
+        <input type="text" id="po-sheet-name" placeholder="e.g. BLR FK Gro PO FIle" value="BLR FK Gro PO FIle">
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="card">
+    <button class="run-btn" id="run-btn" onclick="runAutomation()">⚡ Run Automation</button>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="log-box" id="log-box"></div>
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results" id="results">
+    <h3>✅ Files ready to download</h3>
+    <div class="stats">
+      <div class="stat"><div class="num" id="stat-total">-</div><div class="lbl">Total SO Rows</div></div>
+      <div class="stat"><div class="num" id="stat-valid">-</div><div class="lbl">Valid Rows (CSV)</div></div>
+      <div class="stat na"><div class="num" id="stat-na">-</div><div class="lbl">NA Rows (2nd Tab)</div></div>
+      <div class="stat"><div class="num" id="stat-po">-</div><div class="lbl">PO IDs Generated</div></div>
+    </div>
+    <div class="dl-btns">
+      <button class="dl-btn primary" id="dl-csv">⬇ Download CSV</button>
+      <button class="dl-btn secondary" id="dl-xlsx">⬇ Download Excel (Valid + NA tabs)</button>
+      <button class="dl-btn secondary" id="dl-po">⬇ Download PO Key Mapping</button>
+    </div>
+  </div>
+
+</div><!-- end #tab-gro -->
+
+<!-- ═══════════════════ FnV TAB ═══════════════════ -->
+<div class="tab-panel fnv-accent" id="tab-fnv">
+
+  <!-- FnV STEP 1 -->
+  <div class="card">
+    <div class="card-title"><span class="step">1</span> Upload Files</div>
+    <div class="row">
+      <div class="field">
+        <label>FnV All-City Excel <span class="tag teal">Excel</span></label>
+        <div class="drop-zone" id="dz-fnv" onclick="document.getElementById('f-fnv').click()">
+          <input type="file" id="f-fnv" accept=".xlsx,.xls">
+          <div class="icon">🥦</div>
+          <div class="label">Drop FnV All-City Excel here</div>
+          <div class="sub">All cities in one sheet</div>
+          <div class="filename" id="fn-fnv"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Google Sheet URL <span class="tag green">Service Account Auth</span></label>
+        <input type="text" id="fnv-gsheet-url" placeholder="https://docs.google.com/spreadsheets/d/.../edit" style="margin-top: 10px;">
+        <div style="font-size: 11px; color: #999; margin-top: 6px;">Same Google Sheet as Grocery — different tabs will be used.</div>
+      </div>
+    </div>
+    <div class="hint-box">
+      💡 <strong>FnV All-City file:</strong> One Excel with all cities. Select your main city below and satellite cities are automatically included.
+    </div>
+  </div>
+
+  <!-- FnV STEP 2 -->
+  <div class="card">
+    <div class="card-title"><span class="step">2</span> Configuration</div>
+    <div class="row">
+      <div class="field">
+        <label>City</label>
+        <select id="fnv-city" onchange="fnvCityChanged()">
+          <option value="Bangalore">Bangalore (+ Hosur, Mandya, Mysore, Tumkur)</option>
+          <option value="Chennai">Chennai</option>
+          <option value="Mumbai">Mumbai</option>
+          <option value="Hyderabad">Hyderabad</option>
+          <option value="Trichy">Trichy (+ Dindigul, Karur, Thanjavur)</option>
+          <option value="Coimbatore">Coimbatore (+ Erode, Palakkad, Salem, Tirupur)</option>
+          <option value="Nashik">Nashik</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Delivery Date</label>
+        <input type="date" id="fnv-delivery-date">
+      </div>
+    </div>
+    <div class="row" style="margin-top: 20px;">
+      <div class="field">
+        <label>SO Tab Name</label>
+        <input type="text" id="fnv-so-sheet" value="BLR FK SO">
+      </div>
+      <div class="field">
+        <label>PO Tab Name</label>
+        <input type="text" id="fnv-po-sheet" value="BLR FK PO FIle">
+      </div>
+    </div>
+    <div class="row" style="margin-top: 16px;">
+      <div class="field">
+        <label>City Column in Excel <span style="font-size:10px;color:#999;text-transform:none;">(column header name)</span></label>
+        <input type="text" id="fnv-city-col" value="City" placeholder="e.g. City, Location">
+      </div>
+    </div>
+  </div>
+
+  <!-- FnV STEP 3 -->
+  <div class="card">
+    <button class="run-btn" id="fnv-run-btn" onclick="runFnvAutomation()">⚡ Run FnV Automation</button>
+    <div class="progress-wrap" id="fnv-progress-wrap">
+      <div class="progress-bar" id="fnv-progress-bar"></div>
+    </div>
+    <div class="log-box" id="fnv-log-box"></div>
+    <div class="error-msg" id="fnv-error-msg"></div>
+  </div>
+
+  <!-- FnV RESULTS -->
+  <div class="results" id="fnv-results">
+    <h3>✅ FnV Files ready to download</h3>
+    <div class="stats">
+      <div class="stat"><div class="num" id="fnv-stat-total">-</div><div class="lbl">Total SO Rows</div></div>
+      <div class="stat"><div class="num" id="fnv-stat-valid">-</div><div class="lbl">Valid Rows (CSV)</div></div>
+      <div class="stat na"><div class="num" id="fnv-stat-na">-</div><div class="lbl">NA Rows (2nd Tab)</div></div>
+      <div class="stat"><div class="num" id="fnv-stat-po">-</div><div class="lbl">PO IDs Generated</div></div>
+    </div>
+    <div class="dl-btns">
+      <button class="dl-btn primary" id="fnv-dl-csv">⬇ Download CSV</button>
+      <button class="dl-btn secondary" id="fnv-dl-xlsx">⬇ Download Excel (Valid + NA tabs)</button>
+      <button class="dl-btn secondary" id="fnv-dl-po">⬇ Download PO Key Mapping</button>
+    </div>
+    </div>
+  </div>
+</div><!-- end #tab-fnv -->
+
+</div><!-- end .container -->
+
+<script>
+// ── Tab switcher ─────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('tab-' + tab + '-btn').classList.add('active');
+}
+
+// ── State ───────────────────────────────────────────
+let allocFile = null;
+let fnvFile   = null;
+
+const CITY_CONFIG = {
+  Bangalore:  { prefix: 'NCXDB',   cityId: 2, allocName: 'Bangalore', custName: 'BLR FK Customers' },
+  Chennai:    { prefix: 'NCXDC',   cityId: 3, allocName: 'Chennai',   custName: 'CHN FK Customers' },
+  Mumbai:     { prefix: 'NCXDM',   cityId: 4, allocName: 'Mumbai',    custName: 'MUM FK Customers' },
+  Hyderabad:  { prefix: 'NCXDH',   cityId: 5, allocName: 'Hyderabad', custName: 'HYD FK Customers' },
+  Trichy:     { prefix: 'NCXDT',   cityId: 6, allocName: 'Trichy',    custName: 'Trichy FK Customers' },
+  Coimbatore: { prefix: 'NCXDCBE', cityId: 7, allocName: 'Coimbatore',custName: 'Coimbatore FK customer' },
+};
+
+// ── Drop zones ────────────────────────────────────────
+function setupDrop(dzId, inputId, fnId, onFile) {
+  const dz  = document.getElementById(dzId);
+  const inp = document.getElementById(inputId);
+  inp.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0], dz, fnId, onFile); });
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], dz, fnId, onFile);
+  });
+}
+
+function handleFile(file, dz, fnId, onFile) {
+  onFile(file);
+  dz.classList.add('has-file');
+  document.getElementById(fnId).textContent = '✓ ' + file.name;
+}
+
+setupDrop('dz-alloc', 'f-alloc', 'fn-alloc', f => { allocFile = f; });
+setupDrop('dz-fnv',   'f-fnv',   'fn-fnv',   f => { fnvFile   = f; });
+
+// ── Grocery: City select → auto-update tab names ──────────────
+const soSheetMap = {
+  Bangalore: 'BLR FK GRO SO', Chennai: 'CHN FK GRO SO',
+  Mumbai: 'MUM FK GRO SO', Hyderabad: 'HYD FK GRO SO',
+  Trichy: 'Trichy FK GRO SO', Coimbatore: 'CBE FK GRO SO',
+};
+const poSheetMap = {
+  Bangalore: 'BLR FK Gro PO FIle', Chennai: 'CHN FK Gro PO FIle',
+  Mumbai: 'MUM FK Gro PO FIle', Hyderabad: 'HYD FK Gro PO FIle',
+  Trichy: 'Trichy FK Gro PO FIle', Coimbatore: 'CBE FK Gro PO FIle',
+};
+document.getElementById('city').addEventListener('change', function() {
+  document.getElementById('so-sheet-name').value = soSheetMap[this.value] || '';
+  document.getElementById('po-sheet-name').value = poSheetMap[this.value] || '';
+});
+
+// ── FnV: City select → auto-update tab names ────────────────
+const fnvSoSheetMap = {
+  Bangalore:  'BLR FK SO',
+  Chennai:    'CHN FK SO',
+  Mumbai:     'MUM FK SO',
+  Hyderabad:  'HYD FK SO',
+  Trichy:     'Trichy FK SO',
+  Coimbatore: 'Coimbatore FK SO',
+  Nashik:     'Nashik FK SO',
+};
+const fnvPoSheetMap = {
+  Bangalore:  'BLR FK PO FIle',
+  Chennai:    'CHN FK PO FIle',
+  Mumbai:     'MUM FK PO FIle',
+  Hyderabad:  'HYD FK PO FIle',
+  Trichy:     'Trichy FK PO FIle',
+  Coimbatore: 'Coimbatore FK PO File',
+  Nashik:     'Nashik FK PO FIle',
+};
+function fnvCityChanged() {
+  const city = document.getElementById('fnv-city').value;
+  document.getElementById('fnv-so-sheet').value = fnvSoSheetMap[city] || '';
+  document.getElementById('fnv-po-sheet').value = fnvPoSheetMap[city] || '';
+}
+
+// ── Default dates = today ──────────────────────────────
+document.getElementById('delivery-date').valueAsDate = new Date();
+document.getElementById('fnv-delivery-date').valueAsDate = new Date();
+
+// ── Helpers (Grocery) ────────────────────────────────
+function log(msg) {
+  const b = document.getElementById('log-box');
+  b.style.display = 'block';
+  b.innerHTML += `<div>${msg}</div>`;
+  b.scrollTop = b.scrollHeight;
+}
+function setProgress(p) {
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('progress-bar').style.width = p + '%';
+}
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.style.display = 'block'; el.textContent = '⚠ ' + msg;
+}
+function clearUI() {
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('log-box').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('progress-wrap').style.display = 'none';
+  document.getElementById('progress-bar').style.width = '0%';
+}
+
+// ── Helpers (FnV) ───────────────────────────────────
+function fnvLog(msg) {
+  const b = document.getElementById('fnv-log-box');
+  b.style.display = 'block';
+  b.innerHTML += `<div>${msg}</div>`;
+  b.scrollTop = b.scrollHeight;
+}
+function fnvSetProgress(p) {
+  document.getElementById('fnv-progress-wrap').style.display = 'block';
+  document.getElementById('fnv-progress-bar').style.width = p + '%';
+}
+function fnvShowError(msg) {
+  const el = document.getElementById('fnv-error-msg');
+  el.style.display = 'block'; el.textContent = '⚠ ' + msg;
+}
+function fnvClearUI() {
+  document.getElementById('fnv-error-msg').style.display = 'none';
+  document.getElementById('fnv-log-box').innerHTML = '';
+  document.getElementById('fnv-log-box').style.display = 'none';
+  document.getElementById('fnv-results').style.display = 'none';
+  document.getElementById('fnv-progress-wrap').style.display = 'none';
+  document.getElementById('fnv-progress-bar').style.width = '0%';
+}
+
+// ── Grocery: Main run ────────────────────────────────
+async function runAutomation() {
+  clearUI();
+
+  const city      = document.getElementById('city').value;
+  const dateVal   = document.getElementById('delivery-date').value;
+  const gsheetUrl = document.getElementById('gsheet-url').value;
+
+  if (!dateVal)   { showError('Please select a delivery date.'); return; }
+  if (!allocFile) { showError('Please upload the Allocation Excel file.'); return; }
+  if (!gsheetUrl) { showError('Please paste the Google Sheet URL.'); return; }
+
+  const cfg = CITY_CONFIG[city];
+  const [y,m,d] = dateVal.split('-');
+  const deliveryDate = `${d}-${m}-${y}`;
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  setProgress(20);
+  log(`▶ <b>${city}</b> | PO Prefix: <b>${cfg ? cfg.prefix : ''}</b> | Date: <b>${deliveryDate}</b>`);
+  log(`► Sending data to backend server to fetch from GSheet securely...`);
+
+  try {
+    const formData = new FormData();
+    formData.append('city', city);
+    formData.append('date', dateVal);
+    formData.append('allocation_file', allocFile);
+    formData.append('gsheet_url', gsheetUrl);
+    formData.append('so_sheet', document.getElementById('so-sheet-name').value);
+    formData.append('po_sheet', document.getElementById('po-sheet-name').value);
+
+    const response = await fetch('/process', { method: 'POST', body: formData });
+    setProgress(80);
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Server error');
+
+    log(`► Processing complete! Updating UI...`);
+    setProgress(100);
+    document.getElementById('stat-total').textContent = (result.stats.total || '-').toLocaleString();
+    document.getElementById('stat-valid').textContent = (result.stats.valid || '-').toLocaleString();
+    document.getElementById('stat-na').textContent    = (result.stats.na    || '-').toLocaleString();
+    document.getElementById('stat-po').textContent    = (result.stats.po    || '-').toLocaleString();
+
+    const runId = result.run_id;
+    document.getElementById('dl-csv').onclick  = () => window.location.href = `/download/${runId}/csv`;
+    document.getElementById('dl-xlsx').onclick = () => window.location.href = `/download/${runId}/xlsx`;
+    document.getElementById('dl-po').onclick   = () => window.location.href = `/download/${runId}/po`;
+
+    document.getElementById('results').style.display = 'block';
+    log('✅ <b>Done!</b> Click buttons above to download.');
+  } catch (err) {
+    showError(err.message);
+    log('❌ ' + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── FnV: Main run ──────────────────────────────────
+async function runFnvAutomation() {
+  fnvClearUI();
+
+  const city      = document.getElementById('fnv-city').value;
+  const dateVal   = document.getElementById('fnv-delivery-date').value;
+  const gsheetUrl = document.getElementById('fnv-gsheet-url').value;
+
+  if (!dateVal)  { fnvShowError('Please select a delivery date.'); return; }
+  if (!fnvFile)  { fnvShowError('Please upload the FnV All-City Excel file.'); return; }
+  if (!gsheetUrl){ fnvShowError('Please paste the Google Sheet URL.'); return; }
+
+  const [y,m,d] = dateVal.split('-');
+  const deliveryDate = `${d}-${m}-${y}`;
+
+  const btn = document.getElementById('fnv-run-btn');
+  btn.disabled = true;
+  fnvSetProgress(20);
+  fnvLog(`▶ <b>FnV | ${city}</b> | Date: <b>${deliveryDate}</b>`);
+  fnvLog(`► Uploading FnV Excel and writing to Google Sheet PO tab...`);
+
+  try {
+    const formData = new FormData();
+    formData.append('city', city);
+    formData.append('date', dateVal);
+    formData.append('fnv_file', fnvFile);
+    formData.append('gsheet_url', gsheetUrl);
+    formData.append('so_sheet', document.getElementById('fnv-so-sheet').value);
+    formData.append('po_sheet', document.getElementById('fnv-po-sheet').value);
+    formData.append('city_col', document.getElementById('fnv-city-col').value);
+
+    fnvLog(`► Waiting for GSheet formulas... (this takes ~5 sec)`);
+    const response = await fetch('/process_fnv', { method: 'POST', body: formData });
+    fnvSetProgress(80);
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Server error');
+
+    fnvLog(`► Processing complete! Updating UI...`);
+    fnvSetProgress(100);
+    document.getElementById('fnv-stat-total').textContent = (result.stats.total || '-').toLocaleString();
+    document.getElementById('fnv-stat-valid').textContent = (result.stats.valid || '-').toLocaleString();
+    document.getElementById('fnv-stat-na').textContent    = (result.stats.na    || '-').toLocaleString();
+    document.getElementById('fnv-stat-po').textContent    = (result.stats.po    || '-').toLocaleString();
+
+    const runId = result.run_id;
+    document.getElementById('fnv-dl-csv').onclick  = () => window.location.href = `/download/${runId}/csv`;
+    document.getElementById('fnv-dl-xlsx').onclick = () => window.location.href = `/download/${runId}/xlsx`;
+    document.getElementById('fnv-dl-po').onclick   = () => window.location.href = `/download/${runId}/po`;
+
+    document.getElementById('fnv-results').style.display = 'block';
+    fnvLog('✅ <b>Done!</b> Click buttons above to download.');
+  } catch (err) {
+    fnvShowError(err.message);
+    fnvLog('❌ ' + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
+
