@@ -609,7 +609,7 @@ def run_automation(
             print(f"       [Alloc] Filled Title for {filled} NA rows from Allocation file.")
 
         # ── Pass 2: Fetch missing Price from DB using SKU Name ──────────
-        need_price_mask = df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A"])
+        need_price_mask = df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "0", "0.0"])
         names_for_db = df_na.loc[
             need_price_mask & ~df_na["Title"].astype(str).str.strip().isin(["", "NA", "#N/A"]),
             "Title"
@@ -620,7 +620,7 @@ def run_automation(
                 price_map = db_lookup.fetch_price_by_name(names_for_db, city)
                 if price_map:
                     def _fill_price_from_db(row):
-                        if str(row["Price"]).strip() in ("", "NA", "#N/A"):
+                        if str(row["Price"]).strip() in ("", "NA", "#N/A", "nan", "None", "0", "0.0"):
                             key = str(row["Title"]).strip().lower()
                             return price_map.get(key, row["Price"])
                         return row["Price"]
@@ -677,7 +677,7 @@ def run_automation(
         # ── Pass 3: Re-evaluate NA rows after enrichment ────────────────
         # For rows where we now have a Price, update Sales Price in raw_df_na
         # and re-run the NA check — promote newly valid rows to df_valid
-        enriched_price_df = df_na[~df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A"])]
+        enriched_price_df = df_na[~df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "0", "0.0"])]
         if len(enriched_price_df) > 0:
             fsn_to_enriched_price = enriched_price_df.set_index("FSN")["Price"].to_dict()
 
@@ -1124,7 +1124,7 @@ def run_fnv_automation(
             print(f"       [Alloc] Filled Title for {filled} NA rows from Allocation file.")
 
         # ── Pass 2: Fetch missing Price from DB using SKU Name ──────────
-        need_price_mask = df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A"])
+        need_price_mask = df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "0", "0.0"])
         names_for_db = df_na.loc[
             need_price_mask & ~df_na["Title"].astype(str).str.strip().isin(["", "NA", "#N/A"]),
             "Title"
@@ -1135,7 +1135,7 @@ def run_fnv_automation(
                 price_map = db_lookup.fetch_price_by_name(names_for_db, city)
                 if price_map:
                     def _fill_price_from_db_fnv(row):
-                        if str(row["Price"]).strip() in ("", "NA", "#N/A"):
+                        if str(row["Price"]).strip() in ("", "NA", "#N/A", "nan", "None", "0", "0.0"):
                             key = str(row["Title"]).strip().lower()
                             return price_map.get(key, row["Price"])
                         return row["Price"]
@@ -1190,7 +1190,7 @@ def run_fnv_automation(
                     print(f"       [DB WARN] Could not fetch contact from DB: {db_err}")
 
         # ── Pass 3: Re-evaluate NA rows after enrichment ────────────────
-        enriched_price_df_fnv = df_na[~df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A"])]
+        enriched_price_df_fnv = df_na[~df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "0", "0.0"])]
         if len(enriched_price_df_fnv) > 0:
             fsn_to_enriched_price_fnv = enriched_price_df_fnv.set_index("FSN")["Price"].to_dict()
             raw_df_na["Sales Price"] = raw_df_na.apply(
