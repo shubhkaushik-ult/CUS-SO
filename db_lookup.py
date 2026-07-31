@@ -14,8 +14,9 @@ CITY_FACILITY_ID = {
 
 _DB_PRICE_BY_NAME_QUERY = """
 SELECT DISTINCT
-    s.Name              AS skuname,
-    s.id                AS sku_id,
+    s.Name AS skuname,
+    ssc.sku_id,
+    vssm.reference_id,
     vssm.customer_price AS price
 FROM cyclops.sku s
 LEFT JOIN cyclops.sku_set_configuration ssc
@@ -25,8 +26,8 @@ LEFT JOIN cyclops.vendor_sku_set_map vssm
 WHERE s.category_id = 4
   AND s.deleted IN (1, 0)
   AND vssm.reference_type = 'FACILITY'
-  AND vssm.reference_id = %(facility_id)s
-  AND s.Name IN %(name_list)s
+  AND vssm.reference_id in %(facility_id)s
+AND s.name in %(name_list)s
 """
 
 _DB_CONTACT_BY_NAME_QUERY = """
@@ -129,7 +130,7 @@ def fetch_price_by_name(name_list: list, city: str, credentials_path: str = None
             cursor.execute("START TRANSACTION READ ONLY")
             cursor.execute(
                 _DB_PRICE_BY_NAME_QUERY,
-                {"facility_id": facility_id, "name_list": tuple(clean_names)},
+                {"facility_id": (facility_id,), "name_list": tuple(clean_names)},
             )
             rows = cursor.fetchall()
             conn.rollback()  # Always rollback — we never write anything
