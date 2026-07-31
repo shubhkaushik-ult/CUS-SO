@@ -3,6 +3,7 @@ import os
 import tempfile
 import uuid
 from werkzeug.utils import secure_filename
+import pandas as pd
 from automation_script import run_automation, run_fnv_automation
 
 app = Flask(__name__)
@@ -24,6 +25,39 @@ def download_file(run_id, file_type):
     filename = os.path.basename(file_path)
     return send_from_directory(directory, filename, as_attachment=True)
 
+@app.route('/detect-city', methods=['POST'])
+def detect_city():
+    alloc_file = request.files.get('file')
+    if not alloc_file:
+        return jsonify({'error': 'No file'}), 400
+        
+    filename = alloc_file.filename.lower()
+    city = None
+    
+    if 'blr' in filename or 'bangalore' in filename or 'bengaluru' in filename: city = 'Bangalore'
+    elif 'chn' in filename or 'chennai' in filename: city = 'Chennai'
+    elif 'mum' in filename or 'mumbai' in filename: city = 'Mumbai'
+    elif 'hyd' in filename or 'hyderabad' in filename: city = 'Hyderabad'
+    elif 'try' in filename or 'trichy' in filename: city = 'Trichy'
+    elif 'cbe' in filename or 'coimbatore' in filename: city = 'Coimbatore'
+        
+    if not city:
+        try:
+            df = pd.read_excel(alloc_file, nrows=10)
+            city_cols = [c for c in df.columns if 'city' in str(c).lower()]
+            if city_cols:
+                first_city = str(df[city_cols[0]].dropna().iloc[0]).lower()
+                if 'blr' in first_city or 'bangal' in first_city or 'bengal' in first_city: city = 'Bangalore'
+                elif 'che' in first_city or 'chn' in first_city: city = 'Chennai'
+                elif 'mum' in first_city: city = 'Mumbai'
+                elif 'hyd' in first_city: city = 'Hyderabad'
+                elif 'tri' in first_city or 'try' in first_city: city = 'Trichy'
+                elif 'coim' in first_city or 'cbe' in first_city: city = 'Coimbatore'
+        except:
+            pass
+
+    return jsonify({'city': city})
+
 @app.route('/process', methods=['POST'])
 def process():
     try:
@@ -32,11 +66,9 @@ def process():
         if not city or not delivery_date_raw:
             return jsonify({'error': 'City and Delivery Date are required'}), 400
 
-        try:
-            y, m, d = delivery_date_raw.split('-')
-            delivery_date = f"{d}-{m}-{y}"
-        except:
-            delivery_date = delivery_date_raw
+        # Automatically set delivery date to today + 1 day
+        from datetime import datetime, timedelta
+        delivery_date = (datetime.today() + timedelta(days=1)).strftime("%d-%m-%Y")
 
         alloc_file = request.files.get('allocation_file')
         if not alloc_file:
@@ -97,11 +129,9 @@ def process_fnv():
         if not city or not delivery_date_raw:
             return jsonify({'error': 'City and Delivery Date are required'}), 400
 
-        try:
-            y, m, d = delivery_date_raw.split('-')
-            delivery_date = f"{d}-{m}-{y}"
-        except:
-            delivery_date = delivery_date_raw
+        # Automatically set delivery date to today + 1 day
+        from datetime import datetime, timedelta
+        delivery_date = (datetime.today() + timedelta(days=1)).strftime("%d-%m-%Y")
 
         fnv_file = request.files.get('fnv_file')
         if not fnv_file:

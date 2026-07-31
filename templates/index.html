@@ -222,6 +222,7 @@
       <div class="field">
         <label>City</label>
         <select id="city">
+          <option value="auto">Auto-Detect from File</option>
           <option value="Bangalore">Bangalore (NCXDB)</option>
           <option value="Chennai">Chennai (NCXDC)</option>
           <option value="Mumbai">Mumbai (NCXDM)</option>
@@ -314,7 +315,7 @@
           <option value="Chennai">Chennai</option>
           <option value="Mumbai">Mumbai</option>
           <option value="Hyderabad">Hyderabad</option>
-          <option value="Trichy">Trichy (+ Dindigul, Karur, Thanjavur)</option>
+          <option value="Trichy">Trichy (+ Dindigul, Karur, Thanjavur, Madurai)</option>
           <option value="Coimbatore">Coimbatore (+ Erode, Palakkad, Salem, Tirupur)</option>
           <option value="Nashik">Nashik</option>
         </select>
@@ -398,7 +399,10 @@ const CITY_CONFIG = {
 function setupDrop(dzId, inputId, fnId, onFile) {
   const dz  = document.getElementById(dzId);
   const inp = document.getElementById(inputId);
-  inp.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0], dz, fnId, onFile); });
+  inp.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (file) handleFile(file, dz, fnId, onFile);
+  });
   dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
   dz.addEventListener('drop', e => {
@@ -407,10 +411,26 @@ function setupDrop(dzId, inputId, fnId, onFile) {
   });
 }
 
-function handleFile(file, dz, fnId, onFile) {
+async function handleFile(file, dz, fnId, onFile) {
   onFile(file);
   dz.classList.add('has-file');
   document.getElementById(fnId).textContent = '✓ ' + file.name;
+  
+  if (fnId === 'fn-alloc' || fnId === 'fn-fnv') {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/detect-city', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.city) {
+        const citySelect = document.getElementById('city');
+        if (citySelect.value !== data.city) {
+          citySelect.value = data.city;
+          citySelect.dispatchEvent(new Event('change'));
+        }
+      }
+    } catch (err) { console.error("Auto-detect failed", err); }
+  }
 }
 
 setupDrop('dz-alloc', 'f-alloc', 'fn-alloc', f => { allocFile = f; });
@@ -627,6 +647,19 @@ async function runFnvAutomation() {
     btn.disabled = false;
   }
 }
+
+// Set default dates to tomorrow
+document.addEventListener("DOMContentLoaded", () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const yyyy = tomorrow.getFullYear();
+  const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const dd = String(tomorrow.getDate()).padStart(2, '0');
+  const tomorrowStr = `${yyyy}-${mm}-${dd}`;
+  
+  document.getElementById('delivery-date').value = tomorrowStr;
+  document.getElementById('fnv-delivery-date').value = tomorrowStr;
+});
 </script>
 </body>
 </html>

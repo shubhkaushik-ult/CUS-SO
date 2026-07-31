@@ -1,4 +1,5 @@
 ecom-so-reader-credetials.json
+db_credentials.json
 __pycache__/
 output/
 *.csv

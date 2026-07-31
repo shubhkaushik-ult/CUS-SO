@@ -447,10 +447,89 @@ def run_automation(
         
         df_na = df_na.drop_duplicates()
 
+        # ── Pass 1: Fill missing Title from Allocation file (already in memory) ──
+        alloc_fsn_col = "FSN" if "FSN" in alloc.columns else None
+        alloc_title_col = next(
+            (c for c in ["FSN_Title", "Title", "NC Name"] if c in alloc.columns), None
+        )
+        if alloc_fsn_col and alloc_title_col:
+            alloc_title_map = (
+                alloc[[alloc_fsn_col, alloc_title_col]]
+                .dropna(subset=[alloc_fsn_col])
+                .drop_duplicates(subset=[alloc_fsn_col])
+                .set_index(alloc_fsn_col)[alloc_title_col]
+                .to_dict()
+            )
+            def _fill_title_from_alloc_gro(row):
+                if str(row["Title"]).strip() in ("", "NA", "#N/A"):
+                    return alloc_title_map.get(str(row["FSN"]).strip(), row["Title"])
+                return row["Title"]
+            df_na["Title"] = df_na.apply(_fill_title_from_alloc_gro, axis=1)
+            filled = (df_na["Title"].astype(str).str.strip() != "NA").sum()
+            print(f"       [Alloc] Filled Title for {filled} NA rows from Allocation file.")
+
+        # ── Pass 2: Fetch missing Price from DB using SKU Name ──────────
+        need_price_mask = df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A"])
+        names_for_db = df_na.loc[
+            need_price_mask & ~df_na["Title"].astype(str).str.strip().isin(["", "NA", "#N/A"]),
+            "Title"
+        ].tolist()
+        if names_for_db:
+            try:
+                import db_lookup
+                price_map = db_lookup.fetch_price_by_name(names_for_db, city)
+                if price_map:
+                    def _fill_price_from_db_gro(row):
+                        if str(row["Price"]).strip() in ("", "NA", "#N/A"):
+                            key = str(row["Title"]).strip().lower()
+                            return price_map.get(key, row["Price"])
+                        return row["Price"]
+                    df_na["Price"] = df_na.apply(_fill_price_from_db_gro, axis=1)
+            except Exception as db_err:
+                print(f"       [DB WARN] Could not fetch price from DB: {db_err}")
+
+        # ── Pass 3: Re-evaluate NA rows after enrichment ────────────────
+        # For rows where we now have a Price, update Sales Price in raw_df_na
+        # and re-run the NA check — promote newly valid rows to df_valid
+        enriched_price_df_gro = df_na[~df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A"])]
+        if len(enriched_price_df_gro) > 0:
+            fsn_to_enriched_price_gro = enriched_price_df_gro.set_index("FSN")["Price"].to_dict()
+
+            raw_df_na["Sales Price"] = raw_df_na.apply(
+                lambda r: fsn_to_enriched_price_gro.get(str(r.get(fsn_col, "")).strip(), r.get("Sales Price", np.nan)),
+                axis=1
+            )
+
+            recheck_cols_gro = [c for c in NA_CHECK_COLS + ["purchaseOrder"] if c in raw_df_na.columns]
+            if recheck_cols_gro:
+                is_null_rc_gro  = raw_df_na[recheck_cols_gro].isnull().any(axis=1)
+                is_blank_rc_gro = (raw_df_na[recheck_cols_gro].fillna("").astype(str).apply(lambda x: x.str.strip()) == "").any(axis=1)
+                is_na_rc_gro    = is_null_rc_gro | is_blank_rc_gro
+            else:
+                is_na_rc_gro = pd.Series(False, index=raw_df_na.index)
+            if "QTY" in raw_df_na.columns:
+                is_na_rc_gro = is_na_rc_gro | (raw_df_na["QTY"].isna() | (pd.to_numeric(raw_df_na["QTY"], errors="coerce").fillna(0) <= 0))
+
+            newly_valid_gro = raw_df_na[~is_na_rc_gro][OUTPUT_COLS].copy()
+            if len(newly_valid_gro) > 0:
+                df_valid = pd.concat([df_valid, newly_valid_gro], ignore_index=True)
+                print(f"       ✅ {len(newly_valid_gro)} rows promoted: NA → Valid SO after DB price enrichment.")
+
+            # Rebuild df_na from still-invalid rows only
+            raw_df_na = raw_df_na[is_na_rc_gro].copy()
+            df_na = pd.DataFrame()
+            if len(raw_df_na) > 0:
+                df_na["FSN"]   = raw_df_na.get(fsn_col, pd.Series(dtype=str)).fillna("NA")
+                t_rc_gro       = raw_df_na.get("Title") if "Title" in raw_df_na.columns else raw_df_na.get("NC Name", pd.Series(dtype=str))
+                df_na["Title"] = t_rc_gro.fillna("NA").replace("", "NA")
+                df_na["Price"] = raw_df_na.get("Sales Price", pd.Series(dtype=str)).fillna("NA")
+                df_na = df_na.drop_duplicates()
+
     print(f"       ✓ Valid rows : {len(df_valid)}")
     print(f"       ✗ NA rows    : {len(df_na)} (distinct)")
     print(f"       ✓ Valid QTY  : {pd.to_numeric(df_valid.get('QTY'), errors='coerce').sum()}")
     print(f"       ✗ NA QTY     : {pd.to_numeric(raw_df_na.get('QTY'), errors='coerce').sum()}")
+
 
     # ── Output ───────────────────────────────────────────────────
     from datetime import datetime
