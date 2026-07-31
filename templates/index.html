@@ -417,19 +417,36 @@ async function handleFile(file, dz, fnId, onFile) {
   document.getElementById(fnId).textContent = '✓ ' + file.name;
   
   if (fnId === 'fn-alloc' || fnId === 'fn-fnv') {
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const res = await fetch('/detect-city', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (data.city) {
-        const citySelect = document.getElementById('city');
-        if (citySelect.value !== data.city) {
-          citySelect.value = data.city;
-          citySelect.dispatchEvent(new Event('change'));
-        }
+    let city = null;
+    const fname = file.name.toLowerCase();
+    if (fname.includes('blr') || fname.includes('bangalore') || fname.includes('bengaluru')) city = 'Bangalore';
+    else if (fname.includes('chn') || fname.includes('chennai')) city = 'Chennai';
+    else if (fname.includes('mum') || fname.includes('mumbai')) city = 'Mumbai';
+    else if (fname.includes('hyd') || fname.includes('hyderabad')) city = 'Hyderabad';
+    else if (fname.includes('try') || fname.includes('trichy') || fname.includes('madurai')) city = 'Trichy';
+    else if (fname.includes('cbe') || fname.includes('coimbatore')) city = 'Coimbatore';
+
+    const citySelect = document.getElementById(fnId === 'fn-fnv' ? 'fnv-city' : 'city') || document.getElementById('city');
+    
+    if (city) {
+      if (citySelect && citySelect.value !== city) {
+        citySelect.value = city;
+        citySelect.dispatchEvent(new Event('change'));
       }
-    } catch (err) { console.error("Auto-detect failed", err); }
+    } else {
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/detect-city', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.city) {
+          if (citySelect && citySelect.value !== data.city) {
+            citySelect.value = data.city;
+            citySelect.dispatchEvent(new Event('change'));
+          }
+        }
+      } catch (err) { console.error("Auto-detect failed", err); }
+    }
   }
 }
 
