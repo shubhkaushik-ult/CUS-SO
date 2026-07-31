@@ -435,10 +435,10 @@ def run_automation(
                 if fk_site_col:
                     if wh_code_col:
                         raw_map_1 = cust_df.set_index(wh_code_col)[fk_site_col].to_dict()
-                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_1.items()})
+                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_1.items() if str(v).strip() not in ["", "nan", "None", "NAN"]})
                     if wh_name_col:
                         raw_map_2 = cust_df.set_index(wh_name_col)[fk_site_col].to_dict()
-                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_2.items()})
+                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_2.items() if str(v).strip() not in ["", "nan", "None", "NAN"]})
             else:
                 fk_site_map = {}
         except Exception as e:
@@ -925,10 +925,10 @@ def run_fnv_automation(
                 if fk_site_col:
                     if wh_code_col:
                         raw_map_1 = cust_df.set_index(wh_code_col)[fk_site_col].to_dict()
-                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_1.items()})
+                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_1.items() if str(v).strip() not in ["", "nan", "None", "NAN"]})
                     if wh_name_col:
                         raw_map_2 = cust_df.set_index(wh_name_col)[fk_site_col].to_dict()
-                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_2.items()})
+                        fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_2.items() if str(v).strip() not in ["", "nan", "None", "NAN"]})
             else:
                 fk_site_map = {}
         except Exception as e:
