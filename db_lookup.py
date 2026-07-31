@@ -15,6 +15,7 @@ CITY_FACILITY_ID = {
 _DB_PRICE_BY_NAME_QUERY = """
 SELECT DISTINCT
     s.Name              AS skuname,
+    s.id                AS sku_id,
     vssm.customer_price AS price
 FROM cyclops.sku s
 LEFT JOIN cyclops.sku_set_configuration ssc
@@ -135,7 +136,10 @@ def fetch_price_by_name(name_list: list, city: str, credentials_path: str = None
 
         for row in rows:
             name_key = str(row["skuname"]).strip().lower()  # lowercase key for safe matching
-            result[name_key] = row["price"] if row["price"] is not None else "NA"
+            result[name_key] = {
+                "price": row["price"] if row["price"] is not None else "NA",
+                "sku_id": row["sku_id"]
+            }
 
         print(f"       [DB] Fetched price for {len(result)} SKUs from DB for {city} (facility {facility_id})")
 
