@@ -1,0 +1,10 @@
+*.mp4
+*.csv
+*.xlsx
+__pycache__/
+outputs_test/
+Io/
+.vercel/
+check_tabs.py
+fix_ws.py
+test_format.py
