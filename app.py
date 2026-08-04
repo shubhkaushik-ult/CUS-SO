@@ -146,9 +146,20 @@ def process():
 @app.route('/process_fnv', methods=['POST'])
 def process_fnv():
     try:
-        # Automatically set delivery date to today + 1 day
         from datetime import datetime, timedelta
-        delivery_date = (datetime.today() + timedelta(days=1)).strftime("%d-%m-%Y")
+        
+        # Check if user provided a date from the frontend
+        delivery_date_raw = request.form.get('date')
+        if delivery_date_raw:
+            # Convert YYYY-MM-DD to DD-MM-YYYY
+            try:
+                dt = datetime.strptime(delivery_date_raw, "%Y-%m-%d")
+                delivery_date = dt.strftime("%d-%m-%Y")
+            except ValueError:
+                delivery_date = (datetime.today() + timedelta(days=1)).strftime("%d-%m-%Y")
+        else:
+            # Fallback to D+1
+            delivery_date = (datetime.today() + timedelta(days=1)).strftime("%d-%m-%Y")
 
         fnv_file = request.files.get('fnv_file')
         if not fnv_file:

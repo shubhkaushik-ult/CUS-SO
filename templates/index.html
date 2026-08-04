@@ -304,6 +304,18 @@
     </div>
   </div>
 
+    <!-- FnV STEP 2: Configuration -->
+  <div class="card" style="margin-top: 20px;">
+    <div class="card-title"><span class="step">2</span> Configuration</div>
+    <div class="row">
+      <div class="field">
+        <label>Delivery Date</label>
+        <input type="date" id="fnv-delivery-date" style="padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 14px; width: 100%; max-width: 250px;">
+        <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">Defaults to tomorrow (D+1)</div>
+      </div>
+    </div>
+  </div>
+
   <!-- FnV STEP 3 -->
   <div class="card">
     <button class="run-btn" id="fnv-run-btn" onclick="runFnvAutomation()">⚡ Run FnV Automation</button>
@@ -590,6 +602,7 @@ async function runFnvAutomation() {
   fnvClearUI();
 
   const gsheetUrl = document.getElementById('fnv-gsheet-url').value;
+  const deliveryDateRaw = document.getElementById('fnv-delivery-date').value;
 
   if (!fnvFile)  { fnvShowError('Please upload the FnV All-City Excel file.'); return; }
   if (!gsheetUrl){ fnvShowError('Please paste the Google Sheet URL.'); return; }
@@ -603,6 +616,7 @@ async function runFnvAutomation() {
   const formData = new FormData();
   formData.append('fnv_file', fnvFile);
   formData.append('gsheet_url', gsheetUrl);
+  if (deliveryDateRaw) formData.append('date', deliveryDateRaw);
 
   try {
     fnvLog(`► Processing... this may take a minute or two.`);
