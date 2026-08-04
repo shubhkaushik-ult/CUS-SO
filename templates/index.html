@@ -428,7 +428,134 @@ document.getElementById('city').addEventListener('change', function() {
   document.getElementById('po-sheet-name').value = poSheetMap[this.value] || '';
 });
 
- catch (err) {
+// ── FnV: City select → auto-update tab names ────────────────
+const fnvSoSheetMap = {
+  Bangalore:  'BLR FK SO',
+  Chennai:    'CHN FK SO',
+  Mumbai:     'MUM FK SO',
+  Hyderabad:  'HYD FK SO',
+  Trichy:     'Trichy FK SO',
+  Coimbatore: 'Coimbatore FK SO',
+  Nashik:     'Nashik FK SO',
+};
+const fnvPoSheetMap = {
+  Bangalore:  'BLR FK PO FIle',
+  Chennai:    'CHN FK PO FIle',
+  Mumbai:     'MUM FK PO FIle',
+  Hyderabad:  'HYD FK PO FIle',
+  Trichy:     'Trichy FK PO FIle',
+  Coimbatore: 'Coimbatore FK PO File',
+  Nashik:     'Nashik FK PO FIle',
+};
+function fnvCityChanged() {
+  const city = document.getElementById('fnv-city').value;
+  document.getElementById('fnv-so-sheet').value = fnvSoSheetMap[city] || '';
+  document.getElementById('fnv-po-sheet').value = fnvPoSheetMap[city] || '';
+}
+
+// ── Default dates = today ──────────────────────────────
+document.getElementById('delivery-date').valueAsDate = new Date();
+document.getElementById('fnv-delivery-date').valueAsDate = new Date();
+
+// ── Helpers (Grocery) ────────────────────────────────
+function log(msg) {
+  const b = document.getElementById('log-box');
+  b.style.display = 'block';
+  b.innerHTML += `<div>${msg}</div>`;
+  b.scrollTop = b.scrollHeight;
+}
+function setProgress(p) {
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('progress-bar').style.width = p + '%';
+}
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.style.display = 'block'; el.textContent = '⚠ ' + msg;
+}
+function clearUI() {
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('log-box').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('progress-wrap').style.display = 'none';
+  document.getElementById('progress-bar').style.width = '0%';
+}
+
+// ── Helpers (FnV) ───────────────────────────────────
+function fnvLog(msg) {
+  const b = document.getElementById('fnv-log-box');
+  b.style.display = 'block';
+  b.innerHTML += `<div>${msg}</div>`;
+  b.scrollTop = b.scrollHeight;
+}
+function fnvSetProgress(p) {
+  document.getElementById('fnv-progress-wrap').style.display = 'block';
+  document.getElementById('fnv-progress-bar').style.width = p + '%';
+}
+function fnvShowError(msg) {
+  const el = document.getElementById('fnv-error-msg');
+  el.style.display = 'block'; el.textContent = '⚠ ' + msg;
+}
+function fnvClearUI() {
+  document.getElementById('fnv-error-msg').style.display = 'none';
+  document.getElementById('fnv-log-box').innerHTML = '';
+  document.getElementById('fnv-log-box').style.display = 'none';
+  document.getElementById('fnv-results').style.display = 'none';
+  document.getElementById('fnv-progress-wrap').style.display = 'none';
+  document.getElementById('fnv-progress-bar').style.width = '0%';
+}
+
+// ── Grocery: Main run ────────────────────────────────
+async function runAutomation() {
+  clearUI();
+
+  const city      = document.getElementById('city').value;
+  const dateVal   = document.getElementById('delivery-date').value;
+  const gsheetUrl = document.getElementById('gsheet-url').value;
+
+  if (!dateVal)   { showError('Please select a delivery date.'); return; }
+  if (!allocFile) { showError('Please upload the Allocation Excel file.'); return; }
+  if (!gsheetUrl) { showError('Please paste the Google Sheet URL.'); return; }
+
+  const cfg = CITY_CONFIG[city];
+  const [y,m,d] = dateVal.split('-');
+  const deliveryDate = `${d}-${m}-${y}`;
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  setProgress(20);
+  log(`▶ <b>${city}</b> | PO Prefix: <b>${cfg ? cfg.prefix : ''}</b> | Date: <b>${deliveryDate}</b>`);
+  log(`► Sending data to backend server to fetch from GSheet securely...`);
+
+  try {
+    const formData = new FormData();
+    formData.append('city', city);
+    formData.append('date', dateVal);
+    formData.append('allocation_file', allocFile);
+    formData.append('gsheet_url', gsheetUrl);
+    formData.append('so_sheet', document.getElementById('so-sheet-name').value);
+    formData.append('po_sheet', document.getElementById('po-sheet-name').value);
+
+    const response = await fetch('/process', { method: 'POST', body: formData });
+    setProgress(80);
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Server error');
+
+    log(`► Processing complete! Updating UI...`);
+    setProgress(100);
+    document.getElementById('stat-total').textContent = (result.stats.total || '-').toLocaleString();
+    document.getElementById('stat-valid').textContent = (result.stats.valid || '-').toLocaleString();
+    document.getElementById('stat-na').textContent    = (result.stats.na    || '-').toLocaleString();
+    document.getElementById('stat-po').textContent    = (result.stats.po    || '-').toLocaleString();
+
+    const runId = result.run_id;
+    document.getElementById('dl-csv').onclick  = () => window.location.href = `/download/${runId}/csv`;
+    document.getElementById('dl-xlsx').onclick = () => window.location.href = `/download/${runId}/xlsx`;
+    document.getElementById('dl-po').onclick   = () => window.location.href = `/download/${runId}/po`;
+
+    document.getElementById('results').style.display = 'block';
+    log('✅ <b>Done!</b> Click buttons above to download.');
+  } catch (err) {
     showError(err.message);
     log('❌ ' + err.message);
     console.error(err);
@@ -441,38 +568,28 @@ document.getElementById('city').addEventListener('change', function() {
 async function runFnvAutomation() {
   fnvClearUI();
 
-  const city      = document.getElementById('fnv-city').value;
-  const dateVal   = document.getElementById('fnv-delivery-date').value;
   const gsheetUrl = document.getElementById('fnv-gsheet-url').value;
 
-  if (!dateVal)  { fnvShowError('Please select a delivery date.'); return; }
   if (!fnvFile)  { fnvShowError('Please upload the FnV All-City Excel file.'); return; }
   if (!gsheetUrl){ fnvShowError('Please paste the Google Sheet URL.'); return; }
-
-  const [y,m,d] = dateVal.split('-');
-  const deliveryDate = `${d}-${m}-${y}`;
 
   const btn = document.getElementById('fnv-run-btn');
   btn.disabled = true;
   fnvSetProgress(20);
-  fnvLog(`▶ <b>FnV | ${city}</b> | Date: <b>${deliveryDate}</b>`);
-  fnvLog(`► Uploading FnV Excel and writing to Google Sheet PO tab...`);
+  fnvLog(`▶ <b>FnV | Processing ALL Cities</b>`);
+  fnvLog(`► Uploading FnV Excel and processing via Google Sheets...`);
+
+  const formData = new FormData();
+  formData.append('fnv_file', fnvFile);
+  formData.append('gsheet_url', gsheetUrl);
 
   try {
-    const formData = new FormData();
-    formData.append('city', city);
-    formData.append('date', dateVal);
-    formData.append('fnv_file', fnvFile);
-    formData.append('gsheet_url', gsheetUrl);
-    formData.append('so_sheet', document.getElementById('fnv-so-sheet').value);
-    formData.append('po_sheet', document.getElementById('fnv-po-sheet').value);
-    formData.append('city_col', document.getElementById('fnv-city-col').value);
-
-    fnvLog(`► Waiting for GSheet formulas... (this takes ~5 sec)`);
+    fnvLog(`► Processing... this may take a minute or two.`);
     const response = await fetch('/process_fnv', { method: 'POST', body: formData });
     fnvSetProgress(80);
+
     const result = await response.json();
-    if (!response.ok || !result.success) throw new Error(result.error || 'Server error');
+    if (!response.ok) throw new Error(result.error || 'Server error');
 
     fnvLog(`► Processing complete! Updating UI...`);
     fnvSetProgress(100);
@@ -482,13 +599,11 @@ async function runFnvAutomation() {
     document.getElementById('fnv-stat-po').textContent    = (result.stats.po    || '-').toLocaleString();
 
     const runId = result.run_id;
-    document.getElementById('fnv-dl-csv').onclick  = () => window.location.href = `/download/${runId}/csv`;
-    document.getElementById('fnv-dl-xlsx').onclick = () => window.location.href = `/download/${runId}/xlsx`;
-    document.getElementById('fnv-dl-po').onclick   = () => window.location.href = `/download/${runId}/po`;
+    document.getElementById('fnv-dl-zip').onclick  = () => window.location.href = `/download/${runId}/zip`;
 
     document.getElementById('fnv-results').style.display = 'block';
-    fnvLog('✅ <b>Done!</b> Click buttons above to download.');
-  } catch (err) {
+    fnvLog('✅ <b>Done!</b> Click the button above to download the ZIP file.');
+  } catch(err) {
     fnvShowError(err.message);
     fnvLog('❌ ' + err.message);
     console.error(err);
