@@ -14,6 +14,7 @@ def process_all_fnv_cities(fnv_alloc_path, delivery_date, gsheet_url, output_dir
     total_na = 0
     total_po = 0
     total_so_processed = 0
+    city_stats = {}
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         for city, cfg in FNV_CITY_CONFIG.items():
@@ -39,15 +40,29 @@ def process_all_fnv_cities(fnv_alloc_path, delivery_date, gsheet_url, output_dir
                 total_so_processed += total_so
                 
                 # Add to ZIP
-                if os.path.exists(csv_path):
+                has_csv = os.path.exists(csv_path)
+                has_na = os.path.exists(xlsx_path)
+                has_po = os.path.exists(po_path)
+                
+                if has_csv:
                     zf.write(csv_path, f"{city}/{os.path.basename(csv_path)}")
-                if os.path.exists(xlsx_path):
+                if has_na:
                     zf.write(xlsx_path, f"{city}/{os.path.basename(xlsx_path)}")
-                if os.path.exists(po_path):
+                if has_po:
                     zf.write(po_path, f"{city}/{os.path.basename(po_path)}")
+                    
+                city_stats[city] = {
+                    'valid': valid_len,
+                    'na': na_len,
+                    'total_so': total_so,
+                    'po': po_generated,
+                    'csv_path': csv_path if has_csv else None,
+                    'xlsx_path': xlsx_path if has_na else None,
+                    'po_path': po_path if has_po else None,
+                }
                     
             except Exception as e:
                 print(f"Skipped or failed for {city}: {e}")
                 # traceback.print_exc()
                 
-    return zip_path, total_valid, total_na, total_so_processed, total_po
+    return zip_path, total_valid, total_na, total_so_processed, total_po, city_stats

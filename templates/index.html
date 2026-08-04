@@ -315,17 +315,38 @@
   </div>
 
   <!-- FnV RESULTS -->
-  <div class="results" id="fnv-results">
-    <h3>✅ FnV Files ready to download</h3>
-    <div class="stats">
-      <div class="stat"><div class="num" id="fnv-stat-total">-</div><div class="lbl">Total SO Rows</div></div>
-      <div class="stat"><div class="num" id="fnv-stat-valid">-</div><div class="lbl">Valid Rows (CSV)</div></div>
-      <div class="stat na"><div class="num" id="fnv-stat-na">-</div><div class="lbl">NA Rows (2nd Tab)</div></div>
-      <div class="stat"><div class="num" id="fnv-stat-po">-</div><div class="lbl">PO IDs Generated</div></div>
+  <div class="results" id="fnv-results" style="display: none; margin-top: 20px;">
+    <div style="background:#eaf8ef;color:#2a7e4b;padding:12px 16px;border-radius:6px;margin-bottom:20px;border:1px solid #c3e6cb;">
+      Successfully processed! Master ZIP and individual city files are ready below.
     </div>
-    <div class="dl-btns">
-      <button class="dl-btn primary" id="fnv-dl-zip">⬇ Download All Cities (ZIP)</button>
+
+    <!-- Aggregate Stats -->
+    <div class="stats" style="grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+      <div class="stat" style="border: 1px solid #eaeaea; background: #fff; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="num" id="fnv-stat-cities" style="color: #4338ca; font-size: 28px; font-weight: 800;">-</div>
+        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">Cities Processed</div>
+      </div>
+      <div class="stat" style="border: 1px solid #eaeaea; background: #fff; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="num" id="fnv-stat-total" style="color: #4338ca; font-size: 28px; font-weight: 800;">-</div>
+        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">Total SKU Rows</div>
+      </div>
+      <div class="stat" style="border: 1px solid #eaeaea; background: #fff; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="num" id="fnv-stat-valid" style="color: #4338ca; font-size: 28px; font-weight: 800;">-</div>
+        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">Valid Rows</div>
+      </div>
+      <div class="stat" style="border: 1px solid #eaeaea; background: #fff; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="num" id="fnv-stat-na" style="color: #4338ca; font-size: 28px; font-weight: 800;">-</div>
+        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">NA Rows</div>
+      </div>
     </div>
+
+    <!-- City List Container -->
+    <div id="fnv-city-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+      <!-- Dynamic city cards injected here -->
+    </div>
+
+    <div class="dl-btns" style="text-align: center; margin-top: 20px;">
+      <button class="dl-btn primary" id="fnv-dl-zip" style="width: 100%; max-width: 400px; padding: 14px; font-size: 16px;">⬇ Download Master ZIP (All Cities)</button>
     </div>
   </div>
 </div><!-- end #tab-fnv -->
@@ -593,16 +614,61 @@ async function runFnvAutomation() {
 
     fnvLog(`► Processing complete! Updating UI...`);
     fnvSetProgress(100);
-    document.getElementById('fnv-stat-total').textContent = (result.stats.total || '-').toLocaleString();
-    document.getElementById('fnv-stat-valid').textContent = (result.stats.valid || '-').toLocaleString();
-    document.getElementById('fnv-stat-na').textContent    = (result.stats.na    || '-').toLocaleString();
-    document.getElementById('fnv-stat-po').textContent    = (result.stats.po    || '-').toLocaleString();
+    
+    // Update Aggregate Stats
+    const cityNames = Object.keys(result.city_stats);
+    document.getElementById('fnv-stat-cities').textContent = cityNames.length;
+    document.getElementById('fnv-stat-total').textContent = (result.stats.total || 0).toLocaleString();
+    document.getElementById('fnv-stat-valid').textContent = (result.stats.valid || 0).toLocaleString();
+    document.getElementById('fnv-stat-na').textContent    = (result.stats.na    || 0).toLocaleString();
+
+    // Render City Cards
+    const listContainer = document.getElementById('fnv-city-list');
+    listContainer.innerHTML = '';
+    
+    cityNames.forEach(city => {
+      const stats = result.city_stats[city];
+      const hasNa = stats.na > 0;
+      
+      const card = document.createElement('div');
+      card.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
+      
+      let badge = hasNa ? 
+        `<span style="background: #fef2f2; color: #b91c1c; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;">HAS NA ROWS</span>` :
+        `<span style="background: #eaf8ef; color: #166534; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;">QTY MATCHED</span>`;
+
+      let naHtml = hasNa ? `<span style="color: #d97706; font-weight: 600;">(Valid: ${stats.valid.toLocaleString()}, NA: ${stats.na.toLocaleString()})</span>` : `(Valid: ${stats.valid.toLocaleString()})`;
+      
+      let buttonsHtml = '';
+      if (stats.csv_path) {
+        buttonsHtml += `<button onclick="window.location.href='/download/${result.run_id}/fnv/${city}/csv'" style="background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⬇ Download CSV</button>`;
+      }
+      if (stats.xlsx_path) {
+        buttonsHtml += `<button onclick="window.location.href='/download/${result.run_id}/fnv/${city}/xlsx'" style="background: #b91c1c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">⬇ NA CSV</button>`;
+      }
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 16px;">
+          ${badge}
+          <div>
+            <div style="font-size: 15px; font-weight: 700; color: #1f2937;">${city}</div>
+            <div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
+              Total rows: ${stats.total_so.toLocaleString()} | ${naHtml} | ✅ Match
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center;">
+          ${buttonsHtml}
+        </div>
+      `;
+      listContainer.appendChild(card);
+    });
 
     const runId = result.run_id;
     document.getElementById('fnv-dl-zip').onclick  = () => window.location.href = `/download/${runId}/zip`;
 
     document.getElementById('fnv-results').style.display = 'block';
-    fnvLog('✅ <b>Done!</b> Click the button above to download the ZIP file.');
+    fnvLog('✅ <b>Done!</b> Click the buttons above to download files.');
   } catch(err) {
     fnvShowError(err.message);
     fnvLog('❌ ' + err.message);

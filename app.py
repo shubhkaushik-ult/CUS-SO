@@ -26,6 +26,27 @@ def download_file(run_id, file_type):
     filename = os.path.basename(file_path)
     return send_from_directory(directory, filename, as_attachment=True)
 
+@app.route('/download/<run_id>/fnv/<city>/<file_type>')
+def download_city_file(run_id, city, file_type):
+    if run_id not in GENERATED_FILES or 'city_stats' not in GENERATED_FILES[run_id]:
+        return "Run not found", 404
+    
+    city_stats = GENERATED_FILES[run_id]['city_stats']
+    if city not in city_stats:
+        return "City not found", 404
+        
+    path_key = f"{file_type}_path"
+    if path_key not in city_stats[city] or not city_stats[city][path_key]:
+        return "File not found", 404
+        
+    file_path = city_stats[city][path_key]
+    if not file_path or not os.path.exists(file_path):
+        return "File not found on disk", 404
+        
+    directory = os.path.dirname(file_path)
+    filename = os.path.basename(file_path)
+    return send_from_directory(directory, filename, as_attachment=True)
+
 @app.route('/detect-city', methods=['POST'])
 def detect_city():
     alloc_file = request.files.get('file')
@@ -143,7 +164,7 @@ def process_fnv():
 
         output_dir = tempfile.mkdtemp()
 
-        zip_path, valid_len, na_len, total_so, po_generated = process_all_fnv_cities(
+        zip_path, valid_len, na_len, total_so, po_generated, city_stats = process_all_fnv_cities(
             fnv_alloc_path=fnv_path,
             delivery_date=delivery_date,
             gsheet_url=gsheet_url,
@@ -152,7 +173,8 @@ def process_fnv():
 
         run_id = str(uuid.uuid4())
         GENERATED_FILES[run_id] = {
-            'zip': zip_path
+            'zip': zip_path,
+            'city_stats': city_stats
         }
 
         return jsonify({
@@ -163,7 +185,8 @@ def process_fnv():
                 'valid': valid_len,
                 'na': na_len,
                 'po': po_generated
-            }
+            },
+            'city_stats': city_stats
         })
 
     except Exception as e:
