@@ -4,7 +4,8 @@ import tempfile
 import uuid
 from werkzeug.utils import secure_filename
 import pandas as pd
-from automation_script import run_automation, run_fnv_automation
+from automation_script import run_automation
+from fnv_automation import process_all_fnv_cities
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
@@ -124,11 +125,6 @@ def process():
 @app.route('/process_fnv', methods=['POST'])
 def process_fnv():
     try:
-        city = request.form.get('city')
-        delivery_date_raw = request.form.get('date')
-        if not city or not delivery_date_raw:
-            return jsonify({'error': 'City and Delivery Date are required'}), 400
-
         # Automatically set delivery date to today + 1 day
         from datetime import datetime, timedelta
         delivery_date = (datetime.today() + timedelta(days=1)).strftime("%d-%m-%Y")
@@ -145,28 +141,18 @@ def process_fnv():
         if not gsheet_url:
             return jsonify({'error': 'Google Sheet URL is required'}), 400
 
-        so_sheet = request.form.get('so_sheet')
-        po_sheet = request.form.get('po_sheet')
-        city_col = request.form.get('city_col') or 'City'
-
         output_dir = tempfile.mkdtemp()
 
-        csv_path, xlsx_path, po_path, valid_len, na_len, total_so, po_generated = run_fnv_automation(
+        zip_path, valid_len, na_len, total_so, po_generated = process_all_fnv_cities(
             fnv_alloc_path=fnv_path,
-            city=city,
             delivery_date=delivery_date,
-            output_dir=output_dir,
             gsheet_url=gsheet_url,
-            so_sheet_override=so_sheet,
-            po_sheet_override=po_sheet,
-            city_col=city_col,
+            output_dir=output_dir
         )
 
         run_id = str(uuid.uuid4())
         GENERATED_FILES[run_id] = {
-            'csv': csv_path,
-            'xlsx': xlsx_path,
-            'po': po_path
+            'zip': zip_path
         }
 
         return jsonify({
