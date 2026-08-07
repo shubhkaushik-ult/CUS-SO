@@ -655,10 +655,12 @@ async function runFnvAutomation() {
       
       let buttonsHtml = '';
       if (stats.csv_path) {
-        buttonsHtml += `<button onclick="window.location.href='/download/${result.run_id}/fnv/${city}/csv'" style="background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⬇ Download CSV</button>`;
+        const pathB64 = btoa(unescape(encodeURIComponent(stats.csv_path)));
+        buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⬇ Download CSV</button>`;
       }
       if (stats.xlsx_path) {
-        buttonsHtml += `<button onclick="window.location.href='/download/${result.run_id}/fnv/${city}/xlsx'" style="background: #b91c1c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">⬇ NA CSV</button>`;
+        const pathB64 = btoa(unescape(encodeURIComponent(stats.xlsx_path)));
+        buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #b91c1c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">⬇ NA CSV</button>`;
       }
       
       card.innerHTML = `
@@ -679,7 +681,12 @@ async function runFnvAutomation() {
     });
 
     const runId = result.run_id;
-    document.getElementById('fnv-dl-zip').onclick  = () => window.location.href = `/download/${runId}/zip`;
+    
+    if (result.zip_path) {
+      const pathB64 = btoa(unescape(encodeURIComponent(result.zip_path)));
+      document.getElementById('fnv-dl-zip').onclick  = () => window.location.href = `/download_path?path=${pathB64}`;
+    }
+
 
     document.getElementById('fnv-results').style.display = 'block';
     fnvLog('✅ <b>Done!</b> Click the buttons above to download files.');

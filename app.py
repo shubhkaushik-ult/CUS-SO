@@ -16,6 +16,26 @@ GENERATED_FILES = {}
 def index():
     return render_template('index.html')
 
+
+import base64
+@app.route('/download_path')
+def download_path():
+    path_b64 = request.args.get('path')
+    if not path_b64:
+        return "No path provided", 400
+    try:
+        file_path = base64.b64decode(path_b64).decode('utf-8')
+    except Exception:
+        return "Invalid path", 400
+        
+    if not os.path.exists(file_path):
+        return "File not found on disk", 404
+        
+    directory = os.path.dirname(file_path)
+    filename = os.path.basename(file_path)
+    return send_from_directory(directory, filename, as_attachment=True)
+
+
 @app.route('/download/<run_id>/<file_type>')
 def download_file(run_id, file_type):
     if run_id not in GENERATED_FILES or file_type not in GENERATED_FILES[run_id]:
@@ -135,7 +155,10 @@ def process():
                 'valid': valid_len,
                 'na': na_len,
                 'po': po_generated
-            }
+            },
+            'csv_path': csv_path,
+            'xlsx_path': xlsx_path,
+            'po_path': po_path
         })
 
     except Exception as e:
@@ -185,7 +208,8 @@ def process_fnv():
         run_id = str(uuid.uuid4())
         GENERATED_FILES[run_id] = {
             'zip': zip_path,
-            'city_stats': city_stats
+            'city_stats': city_stats,
+            'zip_path': zip_path
         }
 
         return jsonify({
@@ -197,7 +221,8 @@ def process_fnv():
                 'na': na_len,
                 'po': po_generated
             },
-            'city_stats': city_stats
+            'city_stats': city_stats,
+            'zip_path': zip_path
         })
 
     except Exception as e:
