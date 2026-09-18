@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2.2.1] - Multi-Worker File Cache & Persistent Client-Side Downloads - 2026-09-18
+
+### Fixed
+- **Multi-Worker Railway Download 404 Resolution**:
+  - Implemented disk-backed run metadata registry (`_save_run_meta`, `_load_run_meta`) in [`api/index.py`](file:///d:/CUS%20SO/api/index.py) storing session manifests in `/tmp/cus_so_meta/<run_id>.json`.
+  - Resolved `File not found` errors caused by Gunicorn multi-worker isolation where download requests hit a different worker process from the generation worker.
+- **Persistent Client-Side File Retention**:
+  - Updated [`templates/index.html`](file:///d:/CUS%20SO/templates/index.html) to retain full processed data in JavaScript memory (`window.__LAST_GRO_RESULT`, `window.__LAST_FNV_RESULT`).
+  - Switched all download buttons (GRO CSV, Institutional CSV, Excel Audit, PO Mapping, FnV per-city files, and FnV ZIP) to use client-side `Blob` / Base64 instant downloads.
+  - Ensures files remain immediately downloadable as many times as needed until the tab is closed or refreshed, with zero network round-trip.
+
+---
+
 ## [2.2.0] - Dual Railway/Vercel Deployment, Combined Pipelines & REST Expansion - 2026-09-18
 
 ### Added

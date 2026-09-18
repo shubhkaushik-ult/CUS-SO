@@ -52,6 +52,36 @@ def index():
 
 
 import base64
+import json
+
+RUNS_META_DIR = os.path.join(tempfile.gettempdir(), 'cus_so_meta')
+try:
+    os.makedirs(RUNS_META_DIR, exist_ok=True)
+except Exception:
+    pass
+
+def _save_run_meta(run_id, meta):
+    GENERATED_FILES[run_id] = meta
+    try:
+        fpath = os.path.join(RUNS_META_DIR, f"{run_id}.json")
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(meta, f)
+    except Exception as e:
+        print(f"[WARN] Failed to save run meta to disk: {e}")
+
+def _load_run_meta(run_id):
+    if run_id in GENERATED_FILES:
+        return GENERATED_FILES[run_id]
+    try:
+        fpath = os.path.join(RUNS_META_DIR, f"{run_id}.json")
+        if os.path.exists(fpath):
+            with open(fpath, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+                GENERATED_FILES[run_id] = meta
+                return meta
+    except Exception as e:
+        print(f"[WARN] Failed to load run meta from disk: {e}")
+    return None
 
 def _file_to_b64(filepath):
     if not filepath or not os.path.exists(filepath):
@@ -82,20 +112,25 @@ def download_path():
 
 @app.route('/download/<run_id>/<file_type>')
 def download_file(run_id, file_type):
-    if run_id not in GENERATED_FILES or file_type not in GENERATED_FILES[run_id]:
+    meta = _load_run_meta(run_id)
+    if not meta or file_type not in meta:
         return "File not found", 404
         
-    file_path = GENERATED_FILES[run_id][file_type]
+    file_path = meta[file_type]
+    if not file_path or not os.path.exists(file_path):
+        return "File not found on disk", 404
+        
     directory = os.path.dirname(file_path)
     filename = os.path.basename(file_path)
     return send_from_directory(directory, filename, as_attachment=True)
 
 @app.route('/download/<run_id>/fnv/<city>/<file_type>')
 def download_city_file(run_id, city, file_type):
-    if run_id not in GENERATED_FILES or 'city_stats' not in GENERATED_FILES[run_id]:
+    meta = _load_run_meta(run_id)
+    if not meta or 'city_stats' not in meta:
         return "Run not found", 404
     
-    city_stats = GENERATED_FILES[run_id]['city_stats']
+    city_stats = meta['city_stats']
     if city not in city_stats:
         return "City not found", 404
         
@@ -183,12 +218,12 @@ def process():
         )
 
         run_id = str(uuid.uuid4())
-        GENERATED_FILES[run_id] = {
+        _save_run_meta(run_id, {
             'csv': csv_path,
             'inst_csv': inst_csv_path,
             'xlsx': xlsx_path,
             'po': po_path
-        }
+        })
 
 
         return jsonify({
@@ -266,10 +301,10 @@ def process_fnv():
             stats['inst_csv_b64'] = _file_to_b64(stats.get('inst_csv_path'))
             stats['xlsx_b64'] = _file_to_b64(stats.get('xlsx_path'))
 
-        GENERATED_FILES[run_id] = {
+        _save_run_meta(run_id, {
             'zip': zip_path,
             'city_stats': city_stats
-        }
+        })
 
         return jsonify({
             'success': True,

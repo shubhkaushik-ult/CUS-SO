@@ -548,18 +548,46 @@ function b64ToBlobUrl(b64Data, contentType = 'application/octet-stream') {
 }
 
 function triggerDownload(b64Data, defaultFilename, pathFallback, mimeType = 'text/csv;charset=utf-8;') {
-  if (b64Data) {
-    const blobUrl = b64ToBlobUrl(b64Data, mimeType);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = defaultFilename || 'download.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } else if (pathFallback) {
-    const pathB64 = btoa(unescape(encodeURIComponent(pathFallback)));
-    window.location.href = `/download_path?path=${pathB64}`;
+  if (b64Data && typeof b64Data === 'string' && b64Data.length > 20) {
+    try {
+      const blobUrl = b64ToBlobUrl(b64Data, mimeType);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = defaultFilename || 'download.csv';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+        } catch (e) {}
+      }, 200);
+      return;
+    } catch (e) {
+      console.warn("Base64 direct download failed, falling back to server path", e);
+    }
   }
+
+  if (pathFallback) {
+    if (pathFallback.startsWith('/download/')) {
+      window.location.href = pathFallback;
+    } else {
+      const pathB64 = btoa(unescape(encodeURIComponent(pathFallback)));
+      window.location.href = `/download_path?path=${pathB64}`;
+    }
+  }
+}
+
+function downloadCityInst(city) {
+  const stats = window.__FNV_CITY_STATS && window.__FNV_CITY_STATS[city];
+  if (!stats) return;
+  triggerDownload(stats.inst_csv_b64, `${city}_FnV_Institution.csv`, stats.inst_csv_path, 'text/csv;charset=utf-8;');
+}
+
+function downloadCityNa(city) {
+  const stats = window.__FNV_CITY_STATS && window.__FNV_CITY_STATS[city];
+  if (!stats) return;
+  triggerDownload(stats.xlsx_b64, `${city}_FnV_NA.csv`, stats.xlsx_path, 'text/csv;charset=utf-8;');
 }
 
 
@@ -768,15 +796,28 @@ async function runAutomation() {
     document.getElementById('stat-po').textContent    = (result.stats.po    || '-').toLocaleString();
 
     const runId = result.run_id;
+    window.__LAST_GRO_RESULT = result;
+
     if (document.getElementById('dl-csv')) {
-      document.getElementById('dl-csv').onclick = () => window.location.href = `/download/${runId}/csv`;
+      document.getElementById('dl-csv').onclick = () => {
+        triggerDownload(result.csv_b64, `${city} XD SO ${dateVal}.csv`, `/download/${runId}/csv`, 'text/csv;charset=utf-8;');
+      };
     }
     if (document.getElementById('dl-inst-csv')) {
-      document.getElementById('dl-inst-csv').onclick = () => window.location.href = `/download/${runId}/inst_csv`;
+      document.getElementById('dl-inst-csv').onclick = () => {
+        triggerDownload(result.inst_csv_b64, `${city} XD SO ${dateVal} (Institution).csv`, `/download/${runId}/inst_csv`, 'text/csv;charset=utf-8;');
+      };
     }
-    document.getElementById('dl-xlsx').onclick     = () => window.location.href = `/download/${runId}/xlsx`;
-    document.getElementById('dl-po').onclick       = () => window.location.href = `/download/${runId}/po`;
-
+    if (document.getElementById('dl-xlsx')) {
+      document.getElementById('dl-xlsx').onclick = () => {
+        triggerDownload(result.xlsx_b64, `${city} XD SO ${dateVal}_full.xlsx`, `/download/${runId}/xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      };
+    }
+    if (document.getElementById('dl-po')) {
+      document.getElementById('dl-po').onclick = () => {
+        triggerDownload(result.po_b64, `${city} XD PO Mapping ${dateVal}.xlsx`, `/download/${runId}/po`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      };
+    }
 
     document.getElementById('results').style.display = 'block';
     log('✅ <b>Done!</b> Click buttons above to download.');
@@ -803,26 +844,28 @@ async function runFnvAutomation() {
   btn.disabled = true;
   fnvSetProgress(20);
   fnvLog(`▶ <b>FnV | Processing ALL Cities</b>`);
-  fnvLog(`► Uploading FnV Excel and processing via Google Sheets...`);
-
-  const formData = new FormData();
-  formData.append('fnv_file', fnvFile);
-  formData.append('gsheet_url', gsheetUrl);
-  if (deliveryDateRaw) formData.append('date', deliveryDateRaw);
+  fnvLog('► Uploading FnV file and sending request to server...');
 
   try {
-    fnvLog(`► Processing... this may take a minute or two.`);
+    const formData = new FormData();
+    formData.append('allocation_file', fnvFile);
+    if (typeof fnvPrevFile !== 'undefined' && fnvPrevFile) formData.append('fnv_prev_file', fnvPrevFile);
+    formData.append('gsheet_url', gsheetUrl);
+    if (deliveryDateRaw) formData.append('date', deliveryDateRaw);
+
     const response = await fetch('/process_fnv', { method: 'POST', body: formData });
     fnvSetProgress(80);
 
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Server error');
+    if (!response.ok || !result.success) throw new Error(result.error || 'Server error');
 
-    fnvLog(`► Processing complete! Updating UI...`);
+    fnvLog('► FnV Processing complete! Updating UI...');
     fnvSetProgress(100);
+    window.__LAST_FNV_RESULT = result;
+    window.__FNV_CITY_STATS = result.city_stats || {};
     
     // Update Aggregate Stats
-    const cityNames = Object.keys(result.city_stats);
+    const cityNames = Object.keys(result.city_stats || {});
     document.getElementById('fnv-stat-cities').textContent = cityNames.length;
     document.getElementById('fnv-stat-total').textContent = (result.stats.total || 0).toLocaleString();
     document.getElementById('fnv-stat-valid').textContent = (result.stats.valid || 0).toLocaleString();
@@ -834,9 +877,9 @@ async function runFnvAutomation() {
     
     cityNames.forEach(city => {
       const stats = result.city_stats[city];
-      const hasNa = stats.na > 0;
-      const mismatchCount = stats.lot_mismatch_count || 0;
-      const mismatchQty = stats.lot_mismatch_qty || 0;
+      const hasNa = (stats.na > 0 || (stats.na_qty && stats.na_qty > 0));
+      const mismatchCount = stats.mismatch_count || stats.lot_mismatch_count || 0;
+      const mismatchQty   = stats.mismatch_qty   || stats.lot_mismatch_qty   || 0;
       
       const card = document.createElement('div');
       card.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 8px;";
@@ -856,17 +899,15 @@ async function runFnvAutomation() {
       let naHtml = hasNa ? `<span style="color: #d97706; font-weight: 600;">(Valid QTY: ${validQty.toLocaleString()}, NA QTY: ${naQty.toLocaleString()})</span>` : `(Valid QTY: ${validQty.toLocaleString()})`;
       
       let buttonsHtml = '';
-      if (stats.inst_csv_path) {
-        const pathB64 = btoa(unescape(encodeURIComponent(stats.inst_csv_path)));
-        buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #2563eb; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⬇ Download Institution CSV</button>`;
+      if (stats.inst_csv_b64 || stats.inst_csv_path) {
+        buttonsHtml += `<button onclick="downloadCityInst('${city}')" style="background: #2563eb; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⬇ Download Institution CSV</button>`;
       }
       if (stats.mismatch_xlsx_path) {
         const pathB64 = btoa(unescape(encodeURIComponent(stats.mismatch_xlsx_path)));
         buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #ea580c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⚠️ Lot Mismatch Excel</button>`;
       }
-      if (stats.xlsx_path && hasNa) {
-        const pathB64 = btoa(unescape(encodeURIComponent(stats.xlsx_path)));
-        buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #b91c1c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">⬇ NA CSV</button>`;
+      if ((stats.xlsx_b64 || stats.xlsx_path) && hasNa) {
+        buttonsHtml += `<button onclick="downloadCityNa('${city}')" style="background: #b91c1c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">⬇ NA CSV</button>`;
       }
       
       card.innerHTML = `
@@ -888,14 +929,13 @@ async function runFnvAutomation() {
       listContainer.appendChild(card);
     });
 
-
     const runId = result.run_id;
     
-    if (result.zip_path) {
-      const pathB64 = btoa(unescape(encodeURIComponent(result.zip_path)));
-      document.getElementById('fnv-dl-zip').onclick  = () => window.location.href = `/download_path?path=${pathB64}`;
+    if (result.zip_b64 || result.zip_path) {
+      document.getElementById('fnv-dl-zip').onclick = () => {
+        triggerDownload(result.zip_b64, `FnV_All_Cities_${deliveryDateRaw || 'so'}.zip`, result.zip_path, 'application/zip');
+      };
     }
-
 
     document.getElementById('fnv-results').style.display = 'block';
     fnvLog('✅ <b>Done!</b> Click the buttons above to download files.');
