@@ -13,8 +13,8 @@ if sys.stdout.encoding.lower() != 'utf-8':
 
 warnings.filterwarnings('ignore')
 
-# ── Column used to detect NA rows ──────────────────────────────
-NA_CHECK_COLS = ["FSN", "NC ID", "Sales Price", "lot weight ID", "customer_contact_number(req)"]
+# ── Column used to detect NA rows (Sales Price excluded as price is forced to 1) ──
+NA_CHECK_COLS = ["FSN", "NC ID", "lot weight ID", "customer_contact_number(req)"]
 
 OUTPUT_COLS = [
     "customer_contact_number(req)",
@@ -204,25 +204,76 @@ FNV_SATELLITE_CITIES = {
 }
 
 
+def _get_google_credentials(scopes):
+    """Load Google service account credentials from env vars or local files."""
+    from google.oauth2.service_account import Credentials
+    import json
+    import base64
+
+    # 1. Direct JSON string in environment variable (Railway / Vercel secrets)
+    for env_key in ["ECOM_SO_CREDENTIALS_JSON", "GOOGLE_CREDENTIALS_JSON", "GOOGLE_APPLICATION_CREDENTIALS_JSON"]:
+        val = os.getenv(env_key)
+        if val and val.strip():
+            try:
+                info = json.loads(val.strip())
+                return Credentials.from_service_account_info(info, scopes=scopes)
+            except Exception as e:
+                print(f"       [WARN] Failed to parse {env_key} JSON: {e}")
+
+    # 2. Base64 encoded JSON in environment variable
+    for env_key in ["ECOM_CREDENTIALS_BASE64", "GOOGLE_CREDENTIALS_BASE64"]:
+        val = os.getenv(env_key)
+        if val and val.strip():
+            try:
+                raw_json = base64.b64decode(val.strip()).decode("utf-8")
+                info = json.loads(raw_json)
+                return Credentials.from_service_account_info(info, scopes=scopes)
+            except Exception as e:
+                print(f"       [WARN] Failed to parse {env_key} base64 credentials: {e}")
+
+    # 3. Path from environment variable
+    for env_key in ["ECOM_SO_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS"]:
+        p = os.getenv(env_key)
+        if p and os.path.exists(p):
+            return Credentials.from_service_account_file(p, scopes=scopes)
+
+    # 4. Local candidate files
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(root_dir, "ecom-so-reader-credetials.json"),
+        os.path.join(os.getcwd(), "ecom-so-reader-credetials.json"),
+        "ecom-so-reader-credetials.json",
+        os.path.join(root_dir, "xd-allocation-9640b0ce66d2.json"),
+        os.path.join(os.getcwd(), "xd-allocation-9640b0ce66d2.json"),
+        "xd-allocation-9640b0ce66d2.json",
+        r"d:\Mas SO\ecom-so-reader-credetials.json",
+        r"d:\PO\xd-allocation-9640b0ce66d2.json",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return Credentials.from_service_account_file(c, scopes=scopes)
+
+    raise FileNotFoundError(
+        "Google Service Account credentials not found!\n"
+        "Please set 'ECOM_SO_CREDENTIALS_JSON' in Railway/Vercel Environment Variables, "
+        "or place 'ecom-so-reader-credetials.json' in the project directory."
+    )
+
+
 def get_gsheet_client(gsheet_url: str):
     """Authenticate and return the Google Sheets client and the sheet object."""
     import re, gspread
-    from google.oauth2.service_account import Credentials
     
     match = re.search(r'/d/([a-zA-Z0-9_-]+)', gsheet_url)
     if not match:
         raise ValueError("Could not extract sheet ID from URL")
     sheet_id = match.group(1)
     
-    creds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ecom-so-reader-credetials.json')
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Service account credentials not found at {creds_path}")
-        
     scopes = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]
-    credentials = Credentials.from_service_account_file(creds_path, scopes=scopes)
+    credentials = _get_google_credentials(scopes)
     gc = gspread.authorize(credentials)
     
     try:
@@ -638,6 +689,9 @@ def run_automation(
             print(f"       [Filter] Dropped {dropped_zero} rows with zero/blank QTY before NA split.")
         so_df = so_df[valid_qty_mask].copy()
 
+    # ── Force Sales Price to 1 for all rows (as requested for allocation pricing) ──
+    so_df["Sales Price"] = 1
+
     NA_CHECK_COLS_WITH_PO = NA_CHECK_COLS + ["purchaseOrder"]
     actual_check_cols = [c for c in NA_CHECK_COLS_WITH_PO if c in so_df.columns]
     
@@ -656,6 +710,7 @@ def run_automation(
         is_na = is_na | is_invalid_qty
         
     df_valid = so_df[~is_na][OUTPUT_COLS].copy()
+    df_valid["Sales Price"] = 1
 
     # Generate Institution format CSV alongside Standard
     df_inst = df_valid.copy()
@@ -862,6 +917,33 @@ def run_automation(
         date_tag = delivery_date.replace("-", " ")
 
     base_name = f"{city} XD SO {date_tag}"
+
+    # ── Final Guarantee: Force Sales Price = 1 across all valid rows ──
+    df_valid["Sales Price"] = 1
+
+    # Generate Institution format CSV alongside Standard from final df_valid
+    df_inst = df_valid.copy()
+    df_inst = df_inst.rename(columns={
+        "NC ID": "sku_id(req)",
+        "NC Name": "NC NAME",
+        "QTY": "quantity(req)",
+        "Date": "delivery_date(DD-MM-YYYY)",
+        "lot weight ID": "lot_id(req)",
+        "cancelled (optional)By default should be 0": "cancelled(optional)",
+        "sale_order_id(optional- leave empty)": "sale_order_id(optional)",
+        "sub_type (optional- leave empty)": "sub_type(optional)"
+    })
+    df_inst["delivery_date(DD-MM-YYYY)"] = formatted_date
+    df_inst["skuTypeId"] = 1
+    df_inst["CustomerId"] = ""
+    df_inst["ordering_mode(optional)"] = 1
+    if "Sales Price" in df_inst.columns:
+        df_inst["Sales Price"] = 1
+        
+    for col in INSTITUTION_COLS:
+        if col not in df_inst.columns:
+            df_inst[col] = ""
+    df_inst = df_inst[INSTITUTION_COLS]
 
     csv_path  = os.path.join(output_dir, f"{base_name}.csv")
     inst_csv_path = os.path.join(output_dir, f"{base_name} (Institution).csv")

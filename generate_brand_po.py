@@ -117,26 +117,67 @@ OUTPUT_COLUMNS = [
 # --------------------------------------------------------------------------
 
 def get_gspread_client(credentials_path=None):
+    """Authenticate with Google Sheets via service account credentials (env vars or JSON files)."""
     import gspread
     from google.oauth2.service_account import Credentials
-
-    if not credentials_path:
-        for f in DEFAULT_CREDENTIALS_FILES:
-            if os.path.exists(f):
-                credentials_path = f
-                break
-
-    if not credentials_path or not os.path.exists(credentials_path):
-        raise FileNotFoundError(
-            f"No service account credentials file found. Tried: {DEFAULT_CREDENTIALS_FILES}"
-        )
+    import json
+    import base64
 
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds = Credentials.from_service_account_file(credentials_path, scopes=scopes)
-    return gspread.authorize(creds)
+
+    # 1. Environment variable with raw JSON content
+    for env_key in ["XD_ALLOCATION_CREDENTIALS_JSON", "ECOM_SO_CREDENTIALS_JSON", "GOOGLE_CREDENTIALS_JSON", "GOOGLE_APPLICATION_CREDENTIALS_JSON"]:
+        val = os.getenv(env_key)
+        if val and val.strip():
+            try:
+                info = json.loads(val.strip())
+                return gspread.authorize(Credentials.from_service_account_info(info, scopes=scopes))
+            except Exception as e:
+                print(f"[WARN] Failed to parse {env_key} JSON: {e}")
+
+    # 2. Base64 encoded JSON in environment variable
+    for env_key in ["XD_CREDENTIALS_BASE64", "ECOM_CREDENTIALS_BASE64", "GOOGLE_CREDENTIALS_BASE64"]:
+        val = os.getenv(env_key)
+        if val and val.strip():
+            try:
+                raw_json = base64.b64decode(val.strip()).decode("utf-8")
+                info = json.loads(raw_json)
+                return gspread.authorize(Credentials.from_service_account_info(info, scopes=scopes))
+            except Exception as e:
+                print(f"[WARN] Failed to parse {env_key} base64: {e}")
+
+    # 3. File path passed explicitly or in env var
+    if credentials_path and os.path.exists(credentials_path):
+        return gspread.authorize(Credentials.from_service_account_file(credentials_path, scopes=scopes))
+
+    for env_key in ["XD_ALLOCATION_CREDENTIALS_PATH", "ECOM_SO_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS"]:
+        p = os.getenv(env_key)
+        if p and os.path.exists(p):
+            return gspread.authorize(Credentials.from_service_account_file(p, scopes=scopes))
+
+    # 4. Check candidate file paths
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(root_dir, "xd-allocation-9640b0ce66d2.json"),
+        os.path.join(os.getcwd(), "xd-allocation-9640b0ce66d2.json"),
+        "xd-allocation-9640b0ce66d2.json",
+        os.path.join(root_dir, "ecom-so-reader-credetials.json"),
+        os.path.join(os.getcwd(), "ecom-so-reader-credetials.json"),
+        "ecom-so-reader-credetials.json",
+        r"d:\PO\xd-allocation-9640b0ce66d2.json",
+        r"d:\Mas SO\ecom-so-reader-credetials.json",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return gspread.authorize(Credentials.from_service_account_file(c, scopes=scopes))
+
+    raise FileNotFoundError(
+        "Google Service Account credentials not found for Brand PO!\n"
+        "Please set 'XD_ALLOCATION_CREDENTIALS_JSON' or 'ECOM_SO_CREDENTIALS_JSON' in Environment Variables."
+    )
 
 
 def fetch_worksheet_df(client, sheet_id, tab_name, max_retries=5):

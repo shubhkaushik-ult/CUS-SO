@@ -13,8 +13,8 @@ if sys.stdout.encoding.lower() != 'utf-8':
 
 warnings.filterwarnings('ignore')
 
-# ── Column used to detect NA rows ──────────────────────────────
-NA_CHECK_COLS = ["FSN", "NC ID", "Sales Price", "lot weight ID", "customer_contact_number(req)"]
+# ── Column used to detect NA rows (Sales Price excluded as price is forced to 1) ──
+NA_CHECK_COLS = ["FSN", "NC ID", "lot weight ID", "customer_contact_number(req)"]
 
 OUTPUT_COLS = [
     "customer_contact_number(req)",
@@ -417,6 +417,9 @@ def run_automation(
         is_missing_fsn_or_contact = (so_df[fsn_col].fillna("").astype(str).str.strip() == "") | (so_df["customer_contact_number(req)"].fillna("").astype(str).str.strip() == "")
         so_df = so_df[~is_missing_fsn_or_contact].copy()
         
+    # ── Force Sales Price to 1 for all rows (as requested for allocation pricing) ──
+    so_df["Sales Price"] = 1
+
     NA_CHECK_COLS_WITH_PO = NA_CHECK_COLS + ["purchaseOrder"]
     actual_check_cols = [c for c in NA_CHECK_COLS_WITH_PO if c in so_df.columns]
     
@@ -433,6 +436,7 @@ def run_automation(
         is_na = is_na | is_invalid_qty
         
     df_valid = so_df[~is_na][OUTPUT_COLS].copy()
+    df_valid["Sales Price"] = 1
     
     # Format NA rows to be distinct and contain specific columns
     raw_df_na = so_df[is_na].copy()
