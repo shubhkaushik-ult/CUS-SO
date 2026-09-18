@@ -35,6 +35,24 @@ OUTPUT_COLS = [
     "grocerFlow",
 ]
 
+INSTITUTION_COLS = [
+    "customer_contact_number(req)",
+    "sku_id(req)",
+    "NC NAME",
+    "quantity(req)",
+    "delivery_date(DD-MM-YYYY)",
+    "lot_id(req)",
+    "ordering_mode(optional)",
+    "cancelled(optional)",
+    "purchaseOrder",
+    "Sales Price",
+    "DELIVERY_CHARGE(opt)",
+    "sale_order_id(optional)",
+    "sub_type(optional)",
+    "skuTypeId",
+    "CustomerId"
+]
+
 # ── City config ─────────────────────────────────────────────────
 CITY_CONFIG = {
     "Bangalore": {
@@ -62,7 +80,7 @@ CITY_CONFIG = {
     "Mumbai": {
         "po_prefix":        "NCXDM",
         "city_initial":     "M",
-        "city_id":          4,
+        "city_id":          14,
         "alloc_city_name":  "Mumbai",
         "so_sheet":         "MUM FK GRO SO",
         "po_sheet":         "MUM FK Gro PO FIle",
@@ -352,10 +370,11 @@ def run_automation(
     else:
         print("       [WARN] Could not detect QTY column — skipping zero-QTY filter.")
 
-    if "Store Site ID" in alloc.columns:
-        alloc["Warehouse"] = alloc["Store Site ID"].astype(str).str.strip()
-    elif "Warehouse" in alloc.columns:
+    if "Warehouse" in alloc.columns:
         alloc["Warehouse"] = alloc["Warehouse"].astype(str).str.strip()
+    elif "Store Site ID" in alloc.columns:
+        alloc["Warehouse"] = alloc["Store Site ID"].astype(str).str.strip()
+
 
     if "Store ID" not in alloc.columns and "Store" in alloc.columns:
         alloc["Store ID"] = alloc["Store"]
@@ -476,11 +495,71 @@ def run_automation(
         
         print("       Fetching updated SO data from Google Sheet...")
         so_df = load_gsheet_so(gsheet_url, so_sheet_name)
-    else:
+    elif ecom_path and os.path.exists(ecom_path):
         print("► [2/3] Reading E.com SO Placement data locally...")
         so_df = pd.read_excel(ecom_path, sheet_name=so_sheet_name)
+    else:
+        print("► [2/3] Querying DB directly for SKU, NC Name, Lot ID & City ID...")
+        import db_lookup
+        
+        fsn_col = "FSN" if "FSN" in alloc.columns else "FSN/ISBN13"
+        qty_col = qty_col_alloc if qty_col_alloc else "QTY"
+        
+        fsn_list = alloc[fsn_col].dropna().unique().tolist()
+        db_skus = db_lookup.fetch_skus_from_db(fsn_list, city)
+        
+        # Fetch contact numbers matching against Warehouse name, Customer ID, or Store Site ID
+        contact_map = {}
+        lookup_keys = set()
+        for col in ["Warehouse", "Customer ID", "CustomerId", "Customer", "Store ID", "Store Site ID"]:
+            if col in alloc.columns:
+                lookup_keys.update(alloc[col].dropna().astype(str).str.strip().unique())
+                
+        try:
+            contact_map = db_lookup.fetch_contact_by_name(list(lookup_keys), city)
+        except Exception as e:
+            print(f"       [DB WARN] Could not fetch contact numbers: {e}")
+
+        so_rows = []
+        for idx, row in alloc.iterrows():
+            fsn_val = str(row[fsn_col]).strip().upper().replace('.0', '')
+            qty_val = row[qty_col]
+            wh_val = str(row.get("Warehouse", "")).strip().lower()
+            cust_val = str(row.get("Customer ID", row.get("CustomerId", ""))).strip().lower()
+            store_val = str(row.get("Store ID", "")).strip().lower()
+            
+            info = db_skus.get(fsn_val, {})
+            contact = contact_map.get(wh_val) or contact_map.get(cust_val) or contact_map.get(store_val) or ""
+
+
+            
+            so_rows.append({
+                "customer_contact_number(req)": contact,
+                "NC ID": info.get("sku_id", np.nan),
+                "NC Name": info.get("sku_name", np.nan),
+                "QTY": qty_val,
+                "Date": delivery_date,
+                "lot weight ID": info.get("lot_id", np.nan),
+                "ordering_mode(optional)": "DELIVERY",
+                "cancelled (optional)By default should be 0": 0,
+                "purchaseOrder": row.get("PO_ID_generated", 0),
+                "Sales Price": 1,  # Hardcoded to 1 as requested
+                "DELIVERY_CHARGE(opt)": "",
+                "CITY_ID(req)": info.get("city_id", cfg.get("city_id")),
+                "sale_order_id(optional- leave empty)": "",
+                "sub_type (optional- leave empty)": 1,
+                "CategoryId (if empty then default is 1)": 4,
+
+                "grocerFlow": "",
+                "FSN": fsn_val,
+                "Title": row.get("Title", row.get("FSN_Title", info.get("sku_name", "")))
+            })
+            
+        so_df = pd.DataFrame(so_rows)
+
 
     so_df.columns = so_df.columns.str.strip()
+
     print(f"       {len(so_df)} total rows in SO tab")
 
 
@@ -512,13 +591,23 @@ def run_automation(
     if "customer_contact_number(req)" in so_df.columns:
         so_df["customer_contact_number(req)"] = so_df["customer_contact_number(req)"].apply(parse_contact)
 
-    # Ensure date column is formatted correctly
+    # Ensure date column is formatted correctly to DD-MM-YYYY
     if "Date" in so_df.columns:
-        so_df["Date"] = pd.to_datetime(so_df["Date"], errors="coerce").dt.date
-    # If dates are all NaT, use delivery_date
-    if so_df["Date"].isna().all():
+        so_df["Date"] = pd.to_datetime(so_df["Date"], errors="coerce").dt.strftime("%d-%m-%Y")
+    
+    # If dates are all missing, use delivery_date properly formatted
+    if so_df["Date"].isna().all() or (so_df["Date"] == "NaT").all():
         from datetime import datetime
-        so_df["Date"] = datetime.strptime(delivery_date, "%d-%m-%Y").date()
+        try:
+            dt = datetime.strptime(delivery_date, "%d-%m-%Y")
+            formatted_date = dt.strftime("%d-%m-%Y")
+        except ValueError:
+            try:
+                dt = datetime.strptime(delivery_date, "%d/%m/%Y")
+                formatted_date = dt.strftime("%d-%m-%Y")
+            except ValueError:
+                formatted_date = delivery_date.replace("/", "-")
+        so_df["Date"] = formatted_date
 
     # Ensure all output columns exist
     for col in OUTPUT_COLS:
@@ -567,6 +656,41 @@ def run_automation(
         is_na = is_na | is_invalid_qty
         
     df_valid = so_df[~is_na][OUTPUT_COLS].copy()
+
+    # Generate Institution format CSV alongside Standard
+    df_inst = df_valid.copy()
+    df_inst = df_inst.rename(columns={
+        "NC ID": "sku_id(req)",
+        "NC Name": "NC NAME",
+        "QTY": "quantity(req)",
+        "Date": "delivery_date(DD-MM-YYYY)",
+        "lot weight ID": "lot_id(req)",
+        "cancelled (optional)By default should be 0": "cancelled(optional)",
+        "sale_order_id(optional- leave empty)": "sale_order_id(optional)",
+        "sub_type (optional- leave empty)": "sub_type(optional)"
+    })
+    
+    from datetime import datetime
+    try:
+        dt = datetime.strptime(delivery_date, "%d-%m-%Y")
+        formatted_date = dt.strftime("%d-%m-%Y")
+    except ValueError:
+        try:
+            dt = datetime.strptime(delivery_date, "%d/%m/%Y")
+            formatted_date = dt.strftime("%d-%m-%Y")
+        except ValueError:
+            formatted_date = delivery_date.replace("/", "-")
+            
+    df_inst["delivery_date(DD-MM-YYYY)"] = formatted_date
+        
+    df_inst["skuTypeId"] = 1
+    df_inst["CustomerId"] = ""
+    df_inst["ordering_mode(optional)"] = 1
+    
+    for col in INSTITUTION_COLS:
+        if col not in df_inst.columns:
+            df_inst[col] = ""
+    df_inst = df_inst[INSTITUTION_COLS]
     
     # Format NA rows to be distinct and contain specific columns
     raw_df_na = so_df[is_na].copy()
@@ -632,15 +756,16 @@ def run_automation(
         if "customer_contact_number(req)" in raw_df_na.columns:
             need_contact_mask = raw_df_na["customer_contact_number(req)"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None"])
             
-            # Map purchaseOrder to the original Store Site ID from alloc
+            # Map purchaseOrder to the original Warehouse / Store Site ID from alloc
             if "purchaseOrder" in raw_df_na.columns and "PO_ID_generated" in alloc.columns:
-                store_col = next((c for c in alloc.columns if str(c).strip().lower() in ["store site id", "fk site id"]), None)
+                store_col = next((c for c in alloc.columns if str(c).strip().lower() in ["warehouse", "store site id", "fk site id"]), None)
                 if not store_col:
                     store_col = "Store ID" if "Store ID" in alloc.columns else "Warehouse"
                 po_to_store = alloc.set_index("PO_ID_generated")[store_col].to_dict()
                 raw_df_na["_fallback_store_id"] = raw_df_na["purchaseOrder"].map(po_to_store)
             else:
                 raw_df_na["_fallback_store_id"] = ""
+
 
             names_to_fetch = set()
             for idx, row in raw_df_na[need_contact_mask].iterrows():
@@ -721,6 +846,8 @@ def run_automation(
                 
                 df_na = df_na.drop_duplicates(subset=["FSN"])
 
+
+
     print(f"       ✓ Valid rows : {len(df_valid)}")
     print(f"       ✗ NA rows    : {len(df_na)} (distinct)")
     print(f"       ✓ Valid QTY  : {pd.to_numeric(df_valid.get('QTY'), errors='coerce').sum()}")
@@ -737,13 +864,42 @@ def run_automation(
     base_name = f"{city} XD SO {date_tag}"
 
     csv_path  = os.path.join(output_dir, f"{base_name}.csv")
+    inst_csv_path = os.path.join(output_dir, f"{base_name} (Institution).csv")
     xlsx_path = os.path.join(output_dir, f"{base_name}_full.xlsx")
     po_path   = os.path.join(output_dir, f"{city} XD PO Mapping {date_tag}.xlsx")
 
-    # Main CSV — valid rows only
-    df_valid.to_csv(csv_path, index=False)
+    # Main CSVs
+    # Pass date_format to ensure Pandas doesn't output YYYY-MM-DD
+    df_valid.to_csv(csv_path, index=False, date_format="%d-%m-%Y")
+    
+    # Institution CSV
+    df_inst.to_csv(inst_csv_path, index=False, date_format="%d-%m-%Y")
 
-    # Excel — two tabs: valid + NA
+    # Create Institutional format for ALL rows (including NA, without deduplication)
+    df_all_inst = so_df.copy()
+    df_all_inst = df_all_inst.rename(columns={
+        "NC ID": "sku_id(req)",
+        "NC Name": "NC NAME",
+        "QTY": "quantity(req)",
+        "Date": "delivery_date(DD-MM-YYYY)",
+        "lot weight ID": "lot_id(req)",
+        "cancelled (optional)By default should be 0": "cancelled(optional)",
+        "sale_order_id(optional- leave empty)": "sale_order_id(optional)",
+        "sub_type (optional- leave empty)": "sub_type(optional)"
+    })
+    df_all_inst["delivery_date(DD-MM-YYYY)"] = formatted_date
+    df_all_inst["skuTypeId"] = 1
+    df_all_inst["CustomerId"] = ""
+    df_all_inst["ordering_mode(optional)"] = 1
+    
+    for col in INSTITUTION_COLS:
+        if col not in df_all_inst.columns:
+            df_all_inst[col] = ""
+    df_all_inst = df_all_inst[INSTITUTION_COLS]
+    df_all_inst["sku_id(req)"] = df_all_inst["sku_id(req)"].fillna("NA").replace("", "NA")
+    df_all_inst["lot_id(req)"] = df_all_inst["lot_id(req)"].fillna("NA").replace("", "NA")
+
+    # Excel — three tabs: valid + NA + All Rows (incl NA)
     with pd.ExcelWriter(xlsx_path, engine="openpyxl", datetime_format="DD-MM-YYYY") as writer:
         df_valid.to_excel(writer, sheet_name="SO Output", index=False)
         if len(df_na) > 0:
@@ -752,6 +908,8 @@ def run_automation(
             pd.DataFrame({"Message": ["No NA rows found"]}).to_excel(
                 writer, sheet_name="NA Rows", index=False
             )
+        df_all_inst.to_excel(writer, sheet_name="All Rows (incl NA)", index=False)
+
 
     # PO Key mapping reference
     key_table.to_excel(po_path, index=False)
@@ -760,7 +918,7 @@ def run_automation(
     print(f"  ✅ Excel saved    → {xlsx_path}")
     print(f"  ✅ PO Map saved   → {po_path}\n")
 
-    return csv_path, xlsx_path, po_path, len(df_valid), len(df_na), len(so_df), len(unique_keys)
+    return csv_path, inst_csv_path, xlsx_path, po_path, len(df_valid), len(df_na), len(so_df), len(unique_keys)
 
 
 def run_fnv_automation(
@@ -1036,7 +1194,8 @@ def run_fnv_automation(
             print(f"       [Filter] Dropped {dropped_zero} rows with zero/blank QTY before NA split.")
         so_df = so_df[valid_qty_mask].copy()
 
-    fnv_check_cols = ["sku_id(req)", "Sales Price", "lot_id(req)", "customer_contact_number(req)", "purchaseOrder"]
+    so_df["Sales Price"] = 1
+    fnv_check_cols = ["sku_id(req)", "lot_id(req)", "customer_contact_number(req)", "purchaseOrder"]
     actual_check_cols = [c for c in fnv_check_cols if c in so_df.columns]
     
     if actual_check_cols:
@@ -1070,6 +1229,7 @@ def run_fnv_automation(
 
     base_name = f"{city} FnV CUS SO {date_tag}"
     csv_path  = os.path.join(output_dir, f"{base_name}.csv")
+    inst_csv_path = os.path.join(output_dir, f"{base_name} (Institution).csv")
     xlsx_path = os.path.join(output_dir, f"{base_name}_full.xlsx")
     po_path   = os.path.join(output_dir, f"{city} FnV PO Mapping {date_tag}.xlsx")
 
@@ -1091,7 +1251,7 @@ def run_fnv_automation(
     raw_df_na = so_df[is_na].copy()
     df_na = pd.DataFrame()
     if len(raw_df_na) > 0:
-        fsn_col = next((c for c in ["sku_id(req)", "SKU ID", "sku_id", "FSN", "fsn"] if c in raw_df_na.columns and raw_df_na[c].notna().any()), "sku_id(req)")
+        fsn_col = next((c for c in ["FSN", "fsn", "sku_id(req)", "SKU ID", "sku_id"] if c in raw_df_na.columns and raw_df_na[c].notna().any()), "sku_id(req)")
         df_na["FSN"] = raw_df_na.get(fsn_col, pd.Series(dtype=str)).fillna("NA").replace("", "NA")
         
         title_col = next((c for c in ["NC NAME", "NC Name", "Title", "title"] if c in raw_df_na.columns and raw_df_na[c].notna().any()), "NC NAME")
@@ -1099,6 +1259,8 @@ def run_fnv_automation(
         
         df_na["Price"] = raw_df_na.get("Sales Price", pd.Series(dtype=str)).fillna("NA")
         df_na["QTY"] = raw_df_na.get("quantity(req)", pd.Series(dtype=str)).fillna("NA")
+        if "customer_contact_number(req)" in raw_df_na.columns:
+            df_na["Contact"] = raw_df_na["customer_contact_number(req)"].fillna("Missing")
         
         df_na = df_na.drop_duplicates()
 
@@ -1198,7 +1360,7 @@ def run_fnv_automation(
                 axis=1
             )
 
-        fnv_recheck_cols = [c for c in ["sku_id(req)", "Sales Price", "lot_id(req)", "customer_contact_number(req)", "purchaseOrder"] if c in raw_df_na.columns]
+        fnv_recheck_cols = [c for c in ["sku_id(req)", "lot_id(req)", "customer_contact_number(req)", "purchaseOrder"] if c in raw_df_na.columns]
         if fnv_recheck_cols:
             is_null_rc_fnv  = raw_df_na[fnv_recheck_cols].isnull().any(axis=1)
             stripped_rc_fnv = raw_df_na[fnv_recheck_cols].fillna("").astype(str).apply(lambda x: x.str.strip())
@@ -1219,11 +1381,14 @@ def run_fnv_automation(
         raw_df_na = raw_df_na[is_na_rc_fnv].copy()
         df_na = pd.DataFrame()
         if len(raw_df_na) > 0:
-            df_na["FSN"]   = raw_df_na.get("sku_id(req)", pd.Series(dtype=str)).fillna("NA")
+            fsn_col = next((c for c in ["FSN", "fsn", "sku_id(req)", "SKU ID", "sku_id"] if c in raw_df_na.columns and raw_df_na[c].notna().any()), "sku_id(req)")
+            df_na["FSN"]   = raw_df_na.get(fsn_col, pd.Series(dtype=str)).fillna("NA")
             t_rc_fnv       = raw_df_na.get("Title") if "Title" in raw_df_na.columns else raw_df_na.get("NC NAME", pd.Series(dtype=str))
             df_na["Title"] = t_rc_fnv.fillna("NA").replace("", "NA")
             df_na["Price"] = raw_df_na.get("Sales Price", pd.Series(dtype=str)).fillna("NA")
             df_na["QTY"] = raw_df_na.get("quantity(req)", pd.Series(dtype=str)).fillna("NA")
+            if "customer_contact_number(req)" in raw_df_na.columns:
+                df_na["Contact"] = raw_df_na["customer_contact_number(req)"].fillna("Missing")
             df_na = df_na.drop_duplicates(subset=["FSN"])
 
     print(f"       ✓ Valid rows : {len(df_valid)}")
@@ -1232,6 +1397,38 @@ def run_fnv_automation(
     print(f"       ✗ NA QTY     : {pd.to_numeric(raw_df_na.get('quantity(req)'), errors='coerce').sum()}")
 
     df_valid.to_csv(csv_path, index=False)
+    
+    # Generate Institution format CSV alongside Standard
+    df_inst = df_valid.copy()
+    df_inst = df_inst.rename(columns={
+        "delivery_date(DD-MM-YYY)": "delivery_date(DD-MM-YYYY)",
+        "cancelled (optional)By default should be 0": "cancelled(optional)",
+        "sale_order_id(optional- leave empty)": "sale_order_id(optional)",
+        "sub_type (optional- leave empty)": "sub_type(optional)"
+    })
+    
+    from datetime import datetime
+    try:
+        dt = datetime.strptime(delivery_date, "%d-%m-%Y")
+        formatted_date = dt.strftime("%d-%m-%Y")
+    except ValueError:
+        try:
+            dt = datetime.strptime(delivery_date, "%d/%m/%Y")
+            formatted_date = dt.strftime("%d-%m-%Y")
+        except ValueError:
+            formatted_date = delivery_date.replace("/", "-")
+            
+    df_inst["delivery_date(DD-MM-YYYY)"] = formatted_date
+    df_inst["skuTypeId"] = 1
+    df_inst["CustomerId"] = ""
+    df_inst["ordering_mode(optional)"] = 1
+    
+    for col in INSTITUTION_COLS:
+        if col not in df_inst.columns:
+            df_inst[col] = ""
+    df_inst = df_inst[INSTITUTION_COLS]
+    
+    df_inst.to_csv(inst_csv_path, index=False)
 
     with pd.ExcelWriter(xlsx_path, engine="openpyxl", datetime_format="DD-MM-YYYY", date_format="DD-MM-YYYY") as writer:
         df_valid.to_excel(writer, sheet_name="SO Output", index=False)
@@ -1243,10 +1440,11 @@ def run_fnv_automation(
     key_table.to_excel(po_path, index=False)
 
     print(f"\n  ✅ CSV saved      → {csv_path}")
+    print(f"  ✅ Inst CSV saved → {inst_csv_path}")
     print(f"  ✅ Excel saved    → {xlsx_path}")
     print(f"  ✅ PO Map saved   → {po_path}\n")
 
-    return csv_path, xlsx_path, po_path, len(df_valid), len(df_na), len(so_df), len(unique_keys)
+    return csv_path, inst_csv_path, xlsx_path, po_path, len(df_valid), len(df_na), len(so_df), len(unique_keys)
 
 
 # ── CLI Entry point ─────────────────────────────────────────────

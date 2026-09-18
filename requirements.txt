@@ -2,5 +2,14 @@ Flask
 pandas
 openpyxl
 gspread
+google-auth
+google-auth-oauthlib
+requests
 numpy
 werkzeug
+grpcio>=1.84.0
+grpcio-tools>=1.84.0
+pymysql
+gunicorn>=21.2.0
+python-dotenv>=1.0.0
+ngrok>=1.7.0

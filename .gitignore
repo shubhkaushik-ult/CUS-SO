@@ -1,7 +1,12 @@
 ecom-so-reader-credetials.json
+xd-allocation-*.json
 db_credentials.json
+.env
+.env.local
 __pycache__/
 output/
+outputs_test/
 *.csv
 *.xlsx
 *.mp4
+.vercel/

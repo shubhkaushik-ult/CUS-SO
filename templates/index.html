@@ -98,29 +98,34 @@
   }
 
   .results {
-    display: none; background: #f0fdf8; border: 2px solid #00c896;
+    display: none; background: #ecfdf5; border: 2px solid #10b981;
     border-radius: 16px; padding: 24px 28px; margin-top: 20px;
   }
-  .results h3 { color: #00a878; font-size: 16px; margin-bottom: 16px; }
+  .results h3 { color: #047857; font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; }
 
   .stats { display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
   .stat {
-    background: white; border-radius: 10px; padding: 14px 20px;
-    flex: 1; min-width: 110px; text-align: center; border: 1px solid #d0f0e8;
+    background: white; border-radius: 10px; padding: 16px 20px;
+    flex: 1; min-width: 110px; text-align: center; border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
-  .stat .num { font-size: 26px; font-weight: 800; color: #00a878; }
-  .stat .lbl { font-size: 11px; color: #666; margin-top: 2px; font-weight: 600; }
-  .stat.na .num { color: #e94560; }
+  .stat .num { font-size: 26px; font-weight: 800; color: #10b981; }
+  .stat .lbl { font-size: 11px; color: #6b7280; margin-top: 4px; font-weight: 600; }
+  .stat.na .num { color: #ef4444; }
 
   .dl-btns { display: flex; gap: 12px; flex-wrap: wrap; }
   .dl-btn {
-    padding: 11px 22px; border-radius: 10px; font-size: 13px;
+    padding: 12px 20px; border-radius: 10px; font-size: 13px;
     font-weight: 700; cursor: pointer; border: none; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .dl-btn.primary { background: #00c896; color: white; }
-  .dl-btn.primary:hover { background: #00a878; }
-  .dl-btn.secondary { background: white; color: #555; border: 2px solid #d0d4e0; }
-  .dl-btn.secondary:hover { border-color: #999; }
+  .dl-btn.primary-green { background: #00c896; color: white; }
+  .dl-btn.primary-green:hover { background: #00a878; }
+  .dl-btn.primary-blue { background: #2563eb; color: white; }
+  .dl-btn.primary-blue:hover { background: #1d4ed8; }
+  .dl-btn.secondary-border { background: white; color: #374151; border: 1px solid #c7d2fe; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  .dl-btn.secondary-border:hover { border-color: #93c5fd; background: #f8fafc; }
+
 
   .error-msg {
     display: none; background: #fff0f3; border: 2px solid #e94560;
@@ -151,6 +156,7 @@
   .tab-btn:hover { color: #1a1a2e; }
   .tab-btn.active { color: #e94560; border-bottom-color: #e94560; }
   .tab-btn.active.fnv { color: #0891b2; border-bottom-color: #0891b2; }
+  .tab-btn.active.brand { color: #8b5cf6; border-bottom-color: #8b5cf6; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -164,6 +170,31 @@
   .fnv-accent .dl-btn.primary { background: #0891b2; }
   .fnv-accent .dl-btn.primary:hover { background: #0e7490; }
   .fnv-accent .card-title .step { background: #0891b2; }
+
+  /* Brand PO accent overrides */
+  .brand-accent .run-btn { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+  .brand-accent .run-btn:hover { box-shadow: 0 6px 20px rgba(139,92,246,0.35); }
+  .brand-accent .progress-bar { background: linear-gradient(90deg, #8b5cf6, #c084fc); }
+  .brand-accent .results { border-color: #8b5cf6; background: #f5f3ff; }
+  .brand-accent .results h3 { color: #7c3aed; }
+  .brand-accent .stat .num { color: #7c3aed; }
+  .brand-accent .dl-btn.primary { background: #8b5cf6; color: white; }
+  .brand-accent .dl-btn.primary:hover { background: #7c3aed; }
+  .brand-accent .card-title .step { background: #8b5cf6; }
+
+  /* Loading Spinner Animation */
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 5px solid #e2e8f0;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 </style>
 </head>
 <body>
@@ -180,6 +211,7 @@
 <div class="tab-bar">
   <button class="tab-btn active" id="tab-gro-btn" onclick="switchTab('gro')">🛒 Grocery SO</button>
   <button class="tab-btn fnv" id="tab-fnv-btn" onclick="switchTab('fnv')">🥦 FnV SO</button>
+  <button class="tab-btn brand" id="tab-brand-btn" onclick="switchTab('brand')">📦 Brand PO</button>
 </div>
 
 <div class="container">
@@ -260,7 +292,7 @@
 
   <!-- RESULTS -->
   <div class="results" id="results">
-    <h3>✅ Files ready to download</h3>
+    <h3><span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; background:#10b981; color:white; border-radius:4px; font-size:12px; font-weight:bold; margin-right:6px;">✓</span> Files ready to download</h3>
     <div class="stats">
       <div class="stat"><div class="num" id="stat-total">-</div><div class="lbl">Total SO Rows</div></div>
       <div class="stat"><div class="num" id="stat-valid">-</div><div class="lbl">Valid Rows (CSV)</div></div>
@@ -268,11 +300,12 @@
       <div class="stat"><div class="num" id="stat-po">-</div><div class="lbl">PO IDs Generated</div></div>
     </div>
     <div class="dl-btns">
-      <button class="dl-btn primary" id="dl-csv">⬇ Download CSV</button>
-      <button class="dl-btn secondary" id="dl-xlsx">⬇ Download Excel (Valid + NA tabs)</button>
-      <button class="dl-btn secondary" id="dl-po">⬇ Download PO Key Mapping</button>
+      <button class="dl-btn primary-blue" id="dl-inst-csv">↓ Download Institution CSV</button>
+      <button class="dl-btn secondary-border" id="dl-xlsx">↓ Download Excel (Valid + NA tabs)</button>
+      <button class="dl-btn secondary-border" id="dl-po">↓ Download PO Key Mapping</button>
     </div>
   </div>
+
 
 </div><!-- end #tab-gro -->
 
@@ -283,22 +316,26 @@
   <div class="card">
     <div class="card-title"><span class="step">1</span> Upload Files</div>
     <div class="row">
+
       <div class="field">
-        <label>FnV All-City Excel <span class="tag teal">Excel</span></label>
+        <label>Allocation File <span class="tag teal">FnV Excel</span></label>
         <div class="drop-zone" id="dz-fnv" onclick="document.getElementById('f-fnv').click()">
           <input type="file" id="f-fnv" accept=".xlsx,.xls">
           <div class="icon">🥦</div>
           <div class="label">Drop FnV All-City Excel here</div>
-          <div class="sub">All cities in one sheet</div>
+          <div class="sub">FnV_All_City_*.xlsx</div>
           <div class="filename" id="fn-fnv"></div>
         </div>
       </div>
+
       <div class="field">
         <label>Google Sheet URL <span class="tag green">Service Account Auth</span></label>
         <input type="text" id="fnv-gsheet-url" placeholder="https://docs.google.com/spreadsheets/d/.../edit" style="margin-top: 10px;">
         <div style="font-size: 11px; color: #999; margin-top: 6px;">Same Google Sheet as Grocery — different tabs will be used.</div>
       </div>
+
     </div>
+
     <div class="hint-box">
       💡 <strong>FnV All-City file:</strong> One Excel with all cities. It will automatically process every city.
     </div>
@@ -340,16 +377,17 @@
       </div>
       <div class="stat" style="border: 1px solid #eaeaea; background: #fff; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div class="num" id="fnv-stat-total" style="color: #4338ca; font-size: 28px; font-weight: 800;">-</div>
-        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">Total SKU Rows</div>
+        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">Total SKU QTY</div>
       </div>
       <div class="stat" style="border: 1px solid #eaeaea; background: #fff; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div class="num" id="fnv-stat-valid" style="color: #4338ca; font-size: 28px; font-weight: 800;">-</div>
-        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">Valid Rows</div>
+        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">Valid QTY</div>
       </div>
       <div class="stat" style="border: 1px solid #eaeaea; background: #fff; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div class="num" id="fnv-stat-na" style="color: #4338ca; font-size: 28px; font-weight: 800;">-</div>
-        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">NA Rows</div>
+        <div class="lbl" style="color: #888; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px;">NA QTY</div>
       </div>
+
     </div>
 
     <!-- City List Container -->
@@ -363,6 +401,124 @@
   </div>
 </div><!-- end #tab-fnv -->
 
+<!-- ═══════════════════ BRAND PO TAB ═══════════════════ -->
+<div class="tab-panel" id="tab-brand">
+  <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); position: relative; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+    
+    <!-- Animated Loading Overlay -->
+    <div class="loading-overlay" id="brandLoadingOverlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.92); border-radius: 12px; z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 15px;">
+        <div class="spinner" style="width: 48px; height: 48px; border: 5px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s infinite linear;"></div>
+        <div class="loading-title" style="font-weight: 700; font-size: 17px; color: #0f172a;">Processing Brand PO Generation...</div>
+        <div class="loading-desc" style="font-size: 13px; color: #64748b; max-width: 400px; text-align: center; line-height: 1.5;">Fetching live Google Sheet indents, validating vendor mapping, and compiling PO data...</div>
+    </div>
+
+    <h1 style="font-size: 24px; color: #1e293b; margin-top: 0; display: flex; align-items: center; gap: 10px;">📦 Brand PO Generator</h1>
+    <p style="color: #64748b; font-size: 14px; margin-bottom: 25px;">Multi-city & Batch ALL-cities automated workflow for direct Bifrost upload CSV generation</p>
+
+    <div id="brand-alert-error" class="alert-error" style="display: none; background: #fef2f2; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; border: 1px solid #fca5a5;"></div>
+    <div id="brand-alert-success" class="alert-success" style="display: none; background: #f0fdf4; color: #166534; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; border: 1px solid #bbf7d0;"></div>
+
+    <form id="brandForm" onsubmit="event.preventDefault(); runBrandAutomation();">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label for="brand-city" style="font-weight: 600; font-size: 13px; color: #475569;">Select City / Hub</label>
+                <select id="brand-city" name="city" style="padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; background: #fff;">
+                    <option value="ALL">📦 ALL - All Cities (Batch Generation)</option>
+                    <option value="MUM">MUM - Mumbai</option>
+                    <option value="BLR">BLR - Bangalore</option>
+                    <option value="CHN">CHN - Chennai</option>
+                    <option value="TRICHY">TRICHY - Trichy</option>
+                    <option value="CBE">CBE - Coimbatore</option>
+                </select>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label for="brand-date" style="font-weight: 600; font-size: 13px; color: #475569;">📅 Pick PO (D-2) Date</label>
+                <input type="date" id="brand-date" name="date" style="padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; background: #fff;">
+            </div>
+        </div>
+
+        <button type="submit" class="btn" id="brandSubmitBtn" style="background: #2563eb; color: white; border: none; padding: 14px 24px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            🚀 Generate Combined Brand PO
+        </button>
+    </form>
+
+    <!-- RESULTS SECTION -->
+    <div id="brand-results" style="display: none; margin-top: 30px;">
+        <div class="metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 25px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; text-align: center;">
+                <div style="font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase;">TOTAL SKUs</div>
+                <div id="brand-stat-skus" style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 5px;">-</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; text-align: center;">
+                <div style="font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase;">TOTAL QUANTITY</div>
+                <div id="brand-stat-qty" style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 5px;">-</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; text-align: center;">
+                <div style="font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase;">UNIT PRICE SUM</div>
+                <div id="brand-stat-val" style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 5px;">-</div>
+            </div>
+            <div id="brand-card-mismatches" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; text-align: center;">
+                <div style="font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase;">PRICE MISMATCHES</div>
+                <div id="brand-stat-discrepancies" style="font-size: 22px; font-weight: 700; color: #16a34a; margin-top: 5px;">0</div>
+            </div>
+            <div id="brand-card-na" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; text-align: center;">
+                <div style="font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase;">N/A / MISSING FIELDS</div>
+                <div id="brand-stat-na" style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 5px;">0</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; text-align: center;">
+                <div style="font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase;">VENDORS</div>
+                <div id="brand-stat-vendors" style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 5px;">-</div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 25px;">
+            <button id="brand-dl-csv" class="dl-btn" style="background: #16a34a; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                📦 Download Combined Brand PO CSV
+            </button>
+            <button id="brand-dl-audit" class="dl-btn" style="background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                📊 Download Price & Qty Audit Sheet
+            </button>
+            <button id="brand-dl-na" class="dl-btn" style="background: #c2410c; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; display: none; align-items: center; gap: 6px;">
+                ⚠️ Download Missing Details & NA Sheet
+            </button>
+        </div>
+
+        <!-- City-Wise Breakdown Table -->
+        <div id="brand-city-table-wrapper" style="display: none; margin-top: 30px;">
+            <h3 style="font-size: 16px; color: #1e293b; margin-bottom: 15px;">📊 City-Wise Order, Quantity & Vendor Breakdown</h3>
+            <div style="overflow-x: auto; margin-bottom: 30px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                            <th style="padding: 10px 14px; text-align: left; color: #475569; border: 1px solid #e2e8f0;">City / Hub</th>
+                            <th style="padding: 10px 14px; text-align: center; color: #475569; border: 1px solid #e2e8f0;">Total SKUs</th>
+                            <th style="padding: 10px 14px; text-align: center; color: #475569; border: 1px solid #e2e8f0;">Total Quantity</th>
+                            <th style="padding: 10px 14px; text-align: right; color: #475569; border: 1px solid #e2e8f0;">Unit Price Sum</th>
+                            <th style="padding: 10px 14px; text-align: center; color: #475569; border: 1px solid #e2e8f0;">Vendors (Total)</th>
+                            <th style="padding: 10px 14px; text-align: center; color: #475569; border: 1px solid #e2e8f0;">Date-Wise Vendor & Qty Breakdown</th>
+                            <th style="padding: 10px 14px; text-align: center; color: #475569; border: 1px solid #e2e8f0;">N/A / Missing Items</th>
+                            <th style="padding: 10px 14px; text-align: center; color: #475569; border: 1px solid #e2e8f0;">Price Mismatches</th>
+                            <th style="padding: 10px 14px; text-align: center; color: #475569; border: 1px solid #e2e8f0;">Download City CSV</th>
+                        </tr>
+                    </thead>
+                    <tbody id="brand-city-table-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Date-Wise Vendor & Quantity Breakdown (Single City Mode) -->
+        <div id="brand-date-breakdown-wrapper" style="display: none; margin-top: 25px;">
+            <h3 style="font-size: 15px; color: #1e293b; margin-bottom: 10px;">📅 Date-Wise Vendor & Quantity Breakdown</h3>
+            <div id="brand-date-breakdown-container" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 25px;">
+            </div>
+        </div>
+
+    </div>
+
+  </div>
+</div><!-- end #tab-brand -->
+
 </div><!-- end .container -->
 
 <script>
@@ -374,9 +530,38 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab + '-btn').classList.add('active');
 }
 
-// ── State ───────────────────────────────────────────
-let allocFile = null;
-let fnvFile   = null;
+// ── Client-Side Blob Memory Download Helpers ─────────
+function b64ToBlobUrl(b64Data, contentType = 'application/octet-stream') {
+  const byteCharacters = atob(b64Data);
+  const byteArrays = [];
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+  const blob = new Blob(byteArrays, { type: contentType });
+  return URL.createObjectURL(blob);
+}
+
+function triggerDownload(b64Data, defaultFilename, pathFallback, mimeType = 'text/csv;charset=utf-8;') {
+  if (b64Data) {
+    const blobUrl = b64ToBlobUrl(b64Data, mimeType);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = defaultFilename || 'download.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } else if (pathFallback) {
+    const pathB64 = btoa(unescape(encodeURIComponent(pathFallback)));
+    window.location.href = `/download_path?path=${pathB64}`;
+  }
+}
+
 
 const CITY_CONFIG = {
   Bangalore:  { prefix: 'NCXDB',   cityId: 2, allocName: 'Bangalore', custName: 'BLR FK Customers' },
@@ -444,6 +629,7 @@ async function handleFile(file, dz, fnId, onFile) {
 
 setupDrop('dz-alloc', 'f-alloc', 'fn-alloc', f => { allocFile = f; });
 setupDrop('dz-fnv',   'f-fnv',   'fn-fnv',   f => { fnvFile   = f; });
+
 
 // ── Grocery: City select → auto-update tab names ──────────────
 const soSheetMap = {
@@ -582,9 +768,15 @@ async function runAutomation() {
     document.getElementById('stat-po').textContent    = (result.stats.po    || '-').toLocaleString();
 
     const runId = result.run_id;
-    document.getElementById('dl-csv').onclick  = () => window.location.href = `/download/${runId}/csv`;
-    document.getElementById('dl-xlsx').onclick = () => window.location.href = `/download/${runId}/xlsx`;
-    document.getElementById('dl-po').onclick   = () => window.location.href = `/download/${runId}/po`;
+    if (document.getElementById('dl-csv')) {
+      document.getElementById('dl-csv').onclick = () => window.location.href = `/download/${runId}/csv`;
+    }
+    if (document.getElementById('dl-inst-csv')) {
+      document.getElementById('dl-inst-csv').onclick = () => window.location.href = `/download/${runId}/inst_csv`;
+    }
+    document.getElementById('dl-xlsx').onclick     = () => window.location.href = `/download/${runId}/xlsx`;
+    document.getElementById('dl-po').onclick       = () => window.location.href = `/download/${runId}/po`;
+
 
     document.getElementById('results').style.display = 'block';
     log('✅ <b>Done!</b> Click buttons above to download.');
@@ -643,22 +835,36 @@ async function runFnvAutomation() {
     cityNames.forEach(city => {
       const stats = result.city_stats[city];
       const hasNa = stats.na > 0;
+      const mismatchCount = stats.lot_mismatch_count || 0;
+      const mismatchQty = stats.lot_mismatch_qty || 0;
       
       const card = document.createElement('div');
-      card.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
+      card.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 8px;";
       
       let badge = hasNa ? 
         `<span style="background: #fef2f2; color: #b91c1c; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;">HAS NA ROWS</span>` :
         `<span style="background: #eaf8ef; color: #166534; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;">QTY MATCHED</span>`;
 
-      let naHtml = hasNa ? `<span style="color: #d97706; font-weight: 600;">(Valid: ${stats.valid.toLocaleString()}, NA: ${stats.na.toLocaleString()})</span>` : `(Valid: ${stats.valid.toLocaleString()})`;
+      if (mismatchCount > 0) {
+        badge += ` <span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-left: 6px;">⚠️ LOT MISMATCH: ${mismatchCount} SKUs (${mismatchQty.toLocaleString()} QTY)</span>`;
+      }
+
+      const validQty = stats.valid_qty || stats.valid;
+      const naQty = stats.na_qty || stats.na;
+      const totalQty = stats.total_qty || (validQty + naQty);
+
+      let naHtml = hasNa ? `<span style="color: #d97706; font-weight: 600;">(Valid QTY: ${validQty.toLocaleString()}, NA QTY: ${naQty.toLocaleString()})</span>` : `(Valid QTY: ${validQty.toLocaleString()})`;
       
       let buttonsHtml = '';
-      if (stats.csv_path) {
-        const pathB64 = btoa(unescape(encodeURIComponent(stats.csv_path)));
-        buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⬇ Download CSV</button>`;
+      if (stats.inst_csv_path) {
+        const pathB64 = btoa(unescape(encodeURIComponent(stats.inst_csv_path)));
+        buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #2563eb; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⬇ Download Institution CSV</button>`;
       }
-      if (stats.xlsx_path) {
+      if (stats.mismatch_xlsx_path) {
+        const pathB64 = btoa(unescape(encodeURIComponent(stats.mismatch_xlsx_path)));
+        buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #ea580c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; transition: all 0.2s;">⚠️ Lot Mismatch Excel</button>`;
+      }
+      if (stats.xlsx_path && hasNa) {
         const pathB64 = btoa(unescape(encodeURIComponent(stats.xlsx_path)));
         buttonsHtml += `<button onclick="window.location.href='/download_path?path=${pathB64}'" style="background: #b91c1c; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">⬇ NA CSV</button>`;
       }
@@ -668,8 +874,9 @@ async function runFnvAutomation() {
           ${badge}
           <div>
             <div style="font-size: 15px; font-weight: 700; color: #1f2937;">${city}</div>
-            <div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
-              Total rows: ${stats.total_so.toLocaleString()} | ${naHtml} | ✅ Match
+            <div style="font-size: 12px; color: #4b5563; margin-top: 4px;">
+              Total QTY: ${totalQty.toLocaleString()} | ${naHtml}
+              ${mismatchCount > 0 ? ` | <span style="color: #c2410c; font-weight: 700;">Lot Mismatch Qty: ${mismatchQty.toLocaleString()}</span>` : ''}
             </div>
           </div>
         </div>
@@ -677,8 +884,10 @@ async function runFnvAutomation() {
           ${buttonsHtml}
         </div>
       `;
+
       listContainer.appendChild(card);
     });
+
 
     const runId = result.run_id;
     
@@ -699,7 +908,217 @@ async function runFnvAutomation() {
   }
 }
 
-// Set default dates to tomorrow
+// ── Brand PO: Main run ──────────────────────────────────
+async function runBrandAutomation() {
+  const overlay = document.getElementById('brandLoadingOverlay');
+  const errBox = document.getElementById('brand-alert-error');
+  const succBox = document.getElementById('brand-alert-success');
+  const resDiv = document.getElementById('brand-results');
+  const submitBtn = document.getElementById('brandSubmitBtn');
+
+  if (errBox) errBox.style.display = 'none';
+  if (succBox) succBox.style.display = 'none';
+  if (resDiv) resDiv.style.display = 'none';
+
+  const city = document.getElementById('brand-city').value;
+  const dateVal = document.getElementById('brand-date').value;
+
+  if (!dateVal) {
+    if (errBox) {
+      errBox.textContent = '❌ Please select a target PO (D-2) Date.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (overlay) overlay.style.display = 'flex';
+  if (submitBtn) submitBtn.disabled = true;
+
+  const formData = new FormData();
+  formData.append('city', city);
+  formData.append('date', dateVal);
+
+  try {
+    const response = await fetch('/process_brand_po', { method: 'POST', body: formData });
+    let result;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      result = await response.json();
+    } else {
+      const text = await response.text();
+      throw new Error(`Server error (${response.status}): ${text.substring(0, 300)}`);
+    }
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Server error occurred during Brand PO generation.');
+    }
+
+    if (succBox) {
+      succBox.innerHTML = `✅ <strong>Brand PO Generated Successfully!</strong>`;
+      succBox.style.display = 'block';
+    }
+
+    const stats = result.stats || {};
+    document.getElementById('brand-stat-skus').textContent = (stats.total_skus || 0).toLocaleString();
+    
+    const indentTotalQty = stats.indent_total_qty || stats.total_qty || 0;
+    const finalPOQty = stats.total_qty || 0;
+    const indentDiffQty = stats.indent_diff_qty || 0;
+    let qtyDisplayHtml = `${finalPOQty.toLocaleString()}`;
+    if (indentDiffQty > 0) {
+      qtyDisplayHtml += `<span style="font-size: 12px; color: #dc2626; font-weight: 700; display: block; margin-top: 4px; background: #fff5f5; border: 1px solid #fca5a5; padding: 2px 6px; border-radius: 4px;">⚠️ Indent: ${indentTotalQty.toLocaleString()} (-${indentDiffQty.toLocaleString()} Shortage)</span>`;
+    }
+    document.getElementById('brand-stat-qty').innerHTML = qtyDisplayHtml;
+
+    document.getElementById('brand-stat-val').textContent = '₹' + (stats.total_val || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('brand-stat-vendors').textContent = (stats.vendor_count || 0).toLocaleString();
+    
+    // Price Mismatches Card formatting
+    const discCount = stats.discrepancies || 0;
+    const discEl = document.getElementById('brand-stat-discrepancies');
+    const discCard = document.getElementById('brand-card-mismatches');
+    discEl.textContent = discCount;
+    if (discCount > 0) {
+      discEl.style.color = '#dc2626';
+      discCard.style.background = '#fff5f5';
+      discCard.style.borderColor = '#fca5a5';
+    } else {
+      discEl.style.color = '#16a34a';
+      discCard.style.background = '#f0fdf4';
+      discCard.style.borderColor = '#bbf7d0';
+    }
+
+    // NA Count Card formatting
+    const naCount = stats.na_count || 0;
+    const naQty = stats.na_qty || 0;
+    const naEl = document.getElementById('brand-stat-na');
+    const naCard = document.getElementById('brand-card-na');
+    if (naCount > 0) {
+      naEl.innerHTML = `${naCount} <span style="font-size: 11px; font-weight: 500; color: #64748b;">(${naQty.toLocaleString()} Qty)</span>`;
+      naEl.style.color = '#c2410c';
+      naCard.style.background = '#fff7ed';
+      naCard.style.borderColor = '#fed7aa';
+    } else {
+      naEl.textContent = '0';
+      naEl.style.color = '#0f172a';
+      naCard.style.background = '#f8fafc';
+      naCard.style.borderColor = '#e2e8f0';
+    }
+
+    // Download buttons
+    if (result.output_b64 || result.output_path) {
+      const fn = result.output_filename || 'Brand_PO_Combined.csv';
+      document.getElementById('brand-dl-csv').style.display = 'inline-flex';
+      document.getElementById('brand-dl-csv').onclick = () => triggerDownload(result.output_b64, fn, result.output_path, 'text/csv;charset=utf-8;');
+    }
+    if (result.audit_b64 || result.audit_path) {
+      const fn = result.audit_filename || 'Price_and_Qty_Audit_Sheet.csv';
+      const mime = fn.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8;';
+      document.getElementById('brand-dl-audit').style.display = 'inline-flex';
+      document.getElementById('brand-dl-audit').onclick = () => triggerDownload(result.audit_b64, fn, result.audit_path, mime);
+    } else {
+      document.getElementById('brand-dl-audit').style.display = 'none';
+    }
+    if (result.na_missing_b64 || result.na_missing_path) {
+      const fn = result.na_missing_filename || 'Missing_Details_Sheet.csv';
+      document.getElementById('brand-dl-na').style.display = 'inline-flex';
+      document.getElementById('brand-dl-na').onclick = () => triggerDownload(result.na_missing_b64, fn, result.na_missing_path, 'text/csv;charset=utf-8;');
+    } else {
+      document.getElementById('brand-dl-na').style.display = 'none';
+    }
+
+    // City-Wise Table Breakdown (when ALL is selected or all_results present)
+    const tableWrapper = document.getElementById('brand-city-table-wrapper');
+    const tableBody = document.getElementById('brand-city-table-body');
+    tableBody.innerHTML = '';
+    
+    if (result.all_results && result.all_results.length > 0) {
+      tableWrapper.style.display = 'block';
+      result.all_results.forEach(cRes => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #f1f5f9';
+
+        let dateBreakhtml = '';
+        if (cRes.date_breakdown_detail) {
+          Object.entries(cRes.date_breakdown_detail).forEach(([dStr, info]) => {
+            dateBreakhtml += `<div style="display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; padding: 3px 8px; border-radius: 6px; font-size: 12px; margin: 2px; text-align: left;">
+              📅 <strong>${dStr}</strong>: <span style="color: #2563eb; font-weight: 600;">${info.vendors} vendors</span> | <span style="color: #16a34a; font-weight: 700;">${(info.qty || 0).toLocaleString()} qty</span>
+            </div>`;
+          });
+        } else {
+          dateBreakhtml = '<span style="color: #94a3b8; font-size: 12px;">-</span>';
+        }
+
+        let naTdHtml = cRes.na_count > 0 ?
+          `<span style="display: inline-block; background: #fff7ed; border: 1px solid #fed7aa; color: #c2410c; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;">⚠️ ${cRes.na_count} items (${(cRes.na_qty || 0).toLocaleString()} qty)</span>` :
+          `<span style="color: #16a34a; font-weight: 600; font-size: 13px;">✓ None</span>`;
+
+        let dlBtnId = `brand-dl-city-${cRes.city.replace(/\s+/g, '_')}`;
+        let dlLinkHtml = '-';
+        if (cRes.output_b64 || cRes.output_path) {
+          dlLinkHtml = `<button id="${dlBtnId}" style="background: none; border: none; color: #2563eb; font-weight: 600; font-size: 13px; cursor: pointer; text-decoration: underline;">📦 Download</button>`;
+        }
+
+        let cQtyHtml = (cRes.indent_diff_qty > 0) ?
+          `<span style="color: #16a34a; font-weight: 700;">${(cRes.total_qty || 0).toLocaleString()}</span><br><span style="color: #dc2626; font-weight: 700; font-size: 11px; background: #fff5f5; border: 1px solid #fca5a5; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 3px;">⚠️ Indent: ${(cRes.indent_total_qty || cRes.total_qty).toLocaleString()} (-${cRes.indent_diff_qty.toLocaleString()} Shortage)</span>` :
+          `<span style="color: #16a34a; font-weight: 700;">${(cRes.total_qty || 0).toLocaleString()}</span>`;
+
+        tr.innerHTML = `
+          <td style="padding: 10px 14px; font-weight: 600; color: #0f172a; border: 1px solid #e2e8f0;">
+            <span style="background: #eff6ff; color: #2563eb; padding: 4px 8px; border-radius: 6px; font-size: 13px;">${cRes.city}</span>
+          </td>
+          <td style="padding: 10px 14px; text-align: center; font-weight: 600; border: 1px solid #e2e8f0;">${cRes.total_skus}</td>
+          <td style="padding: 10px 14px; text-align: center; border: 1px solid #e2e8f0;">${cQtyHtml}</td>
+          <td style="padding: 10px 14px; text-align: right; font-weight: 600; border: 1px solid #e2e8f0;">₹${(cRes.total_val || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+          <td style="padding: 10px 14px; text-align: center; font-weight: 700; color: #2563eb; border: 1px solid #e2e8f0;">${cRes.vendor_count}</td>
+          <td style="padding: 10px 14px; text-align: center; border: 1px solid #e2e8f0;">${dateBreakhtml}</td>
+          <td style="padding: 10px 14px; text-align: center; border: 1px solid #e2e8f0;">${naTdHtml}</td>
+          <td style="padding: 10px 14px; text-align: center; font-weight: 600; color: ${cRes.discrepancies_count > 0 ? '#dc2626' : '#16a34a'}; border: 1px solid #e2e8f0;">${cRes.discrepancies_count}</td>
+          <td style="padding: 10px 14px; text-align: center; border: 1px solid #e2e8f0;">${dlLinkHtml}</td>
+        `;
+        tableBody.appendChild(tr);
+        if (cRes.output_b64 || cRes.output_path) {
+          const btn = document.getElementById(dlBtnId);
+          if (btn) {
+            const fn = cRes.output_filename || `${cRes.city}_Brand_PO.csv`;
+            btn.onclick = () => triggerDownload(cRes.output_b64, fn, cRes.output_path, 'text/csv;charset=utf-8;');
+          }
+        }
+      });
+    } else {
+      tableWrapper.style.display = 'none';
+    }
+
+    // Date-Wise Breakdown for Single City mode
+    const dateWrapper = document.getElementById('brand-date-breakdown-wrapper');
+    const dateContainer = document.getElementById('brand-date-breakdown-container');
+    dateContainer.innerHTML = '';
+    if (result.date_breakdown && Object.keys(result.date_breakdown).length > 0) {
+      dateWrapper.style.display = 'block';
+      Object.entries(result.date_breakdown).forEach(([dStr, info]) => {
+        const chip = document.createElement('div');
+        chip.style.cssText = "background: white; border: 1px solid #e2e8f0; padding: 10px 16px; border-radius: 8px; font-size: 14px; color: #334155;";
+        chip.innerHTML = `📅 <strong>${dStr}</strong>: <span style="color: #2563eb; font-weight: 600;">${info.vendors} vendors</span> | <span style="color: #16a34a; font-weight: 700;">${(info.qty || 0).toLocaleString()} qty</span>`;
+        dateContainer.appendChild(chip);
+      });
+    } else {
+      dateWrapper.style.display = 'none';
+    }
+
+    resDiv.style.display = 'block';
+
+  } catch (err) {
+    if (errBox) {
+      errBox.textContent = '❌ ' + err.message;
+      errBox.style.display = 'block';
+    }
+  } finally {
+    if (overlay) overlay.style.display = 'none';
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+// Set default dates to today / tomorrow
 document.addEventListener("DOMContentLoaded", () => {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -708,8 +1127,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const dd = String(tomorrow.getDate()).padStart(2, '0');
   const tomorrowStr = `${yyyy}-${mm}-${dd}`;
   
+  const today = new Date();
+  const t_yyyy = today.getFullYear();
+  const t_mm = String(today.getMonth() + 1).padStart(2, '0');
+  const t_dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${t_yyyy}-${t_mm}-${t_dd}`;
+
   document.getElementById('delivery-date').value = tomorrowStr;
   document.getElementById('fnv-delivery-date').value = tomorrowStr;
+  if (document.getElementById('brand-date')) {
+    document.getElementById('brand-date').value = todayStr;
+  }
 });
 </script>
 </body>

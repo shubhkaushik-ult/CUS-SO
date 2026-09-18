@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package so_service;
+
+// ───────────────────────────────────────────────────────────
+//  SO Fetch Service  — retrieve headers + line items from a
+//  previously processed (or direct-DB-looked-up) Sales Order.
+// ───────────────────────────────────────────────────────────
+
+service SalesOrderService {
+    // Returns the SO column headers and a list of line items
+    // for a given city, date, and SO format type.
+    rpc GetSalesOrder (SORequest) returns (SOResponse);
+
+    // Returns just the column headers (schema) for a given format.
+    rpc GetSOHeaders (HeadersRequest) returns (HeadersResponse);
+}
+
+// ── Request Messages ──────────────────────────────────────
+
+message SORequest {
+    string city         = 1;  // "Bangalore", "Chennai", "Mumbai", etc.
+    string date         = 2;  // "DD-MM-YYYY"  (e.g. "19-09-2026")
+    SOFormat format     = 3;  // Which output format to return
+    string run_id       = 4;  // (optional) re-fetch a cached run
+}
+
+message HeadersRequest {
+    SOFormat format = 1;  // Which format's headers to return
+}
+
+// ── Response Messages ─────────────────────────────────────
+
+message SOResponse {
+    string run_id           = 1;  // Unique ID for this processing run
+    string city             = 2;
+    string date             = 3;
+    SOFormat format         = 4;
+    repeated string headers = 5;  // Ordered column names
+    repeated SOItem items   = 6;  // Line items (one per allocation row)
+    SOStats stats           = 7;  // Summary statistics
+    string error            = 8;  // Non-empty only on failure
+}
+
+message HeadersResponse {
+    SOFormat        format  = 1;
+    repeated string headers = 2;
+}
+
+// ── Data Messages ─────────────────────────────────────────
+
+message SOItem {
+    // Standard GRO SO fields (16 columns)
+    string customer_contact_number  = 1;
+    string nc_id                    = 2;   // SKU ID
+    string nc_name                  = 3;   // SKU Name
+    string qty                      = 4;
+    string date                     = 5;
+    string lot_weight_id            = 6;
+    string ordering_mode            = 7;
+    string cancelled                = 8;
+    string purchase_order           = 9;
+    string sales_price              = 10;
+    string delivery_charge          = 11;
+    string city_id                  = 12;
+    string sale_order_id            = 13;
+    string sub_type                 = 14;
+    string category_id              = 15;
+    string grocer_flow              = 16;
+
+    // Institutional SO extra / renamed fields
+    string sku_id                   = 17;  // same as nc_id in institutional
+    string quantity                 = 18;  // same as qty in institutional
+    string delivery_date            = 19;  // formatted DD-MM-YYYY
+    string lot_id                   = 20;  // same as lot_weight_id
+    string sku_type_id              = 21;
+    string customer_id              = 22;
+
+    // Generic fallback — any column not mapped above
+    map<string, string> extra       = 23;
+}
+
+message SOStats {
+    int32 total_rows    = 1;
+    int32 valid_rows    = 2;
+    int32 na_rows       = 3;
+    int32 po_generated  = 4;
+}
+
+// ── Enums ────────────────────────────────────────────────
+
+enum SOFormat {
+    STANDARD        = 0;    // 16-column GRO SO
+    INSTITUTIONAL   = 1;    // 15-column Institutional SO
+}
