@@ -47,6 +47,7 @@ CITY_CONFIGS = {
         "fsn_col": "Mumbai FSN",
         "input_tab": "MUM PO Input",
         "vendor_po_tab": "MUM Vendor PO ",
+        "config_tab": "MUM GRO SKU config",
         "costing_tab": "MUMBAI",
         "facility_id": 9892,
     },
@@ -57,6 +58,7 @@ CITY_CONFIGS = {
         "fsn_col": "Bangalore FSN",
         "input_tab": "BLR PO Input",
         "vendor_po_tab": "BLR Vendor PO ",
+        "config_tab": "BLR GRO SKU config",
         "costing_tab": "BLR",
         "facility_id": 9382,
     },
@@ -67,6 +69,7 @@ CITY_CONFIGS = {
         "fsn_col": "Chennai FSN",
         "input_tab": "CHN GRO PO Input",
         "vendor_po_tab": "CHN GRO Vendor PO ",
+        "config_tab": "CHN GRO SKU config",
         "costing_tab": "CHENNAI",
         "facility_id": 9920,
     },
@@ -77,6 +80,7 @@ CITY_CONFIGS = {
         "fsn_col": "Trichy FSN",
         "input_tab": "Trichy GRO PO Input",
         "vendor_po_tab": "Trichy GRO Vendor PO ",
+        "config_tab": "Trichy GRO SKU config",
         "costing_tab": "TRICHY",
         "facility_id": 10112,
     },
@@ -87,6 +91,7 @@ CITY_CONFIGS = {
         "fsn_col": "Coimbatore FSN",
         "input_tab": "CBE GRO PO Input",
         "vendor_po_tab": "CBE GRO Vendor PO ",
+        "config_tab": "Coimbatore GRO SKU config",
         "costing_tab": "CBE",
         "facility_id": 10071,
     },
@@ -243,6 +248,79 @@ def load_indent_plan(client, city_code):
     return df, date_col, cfg
 
 
+def ensure_vendor_po_formulas(client, ecom_sheet_id, cfg):
+    """
+    Validates and auto-repairs formulas in the Vendor PO worksheet in ECOM sheet.
+    Guarantees that all SKUs in the SKU config sheet (including newly added vendors like Country Delight)
+    have complete, unbroken VLOOKUP formulas pointing to the PO Input sheet.
+    """
+    try:
+        sh = client.open_by_key(ecom_sheet_id)
+        ws_map = {w.title.strip(): w for w in sh.worksheets()}
+        
+        vtab_name = cfg.get("vendor_po_tab", "").strip()
+        cfg_tab_name = cfg.get("config_tab", "").strip()
+        input_tab_name = cfg.get("input_tab", "").strip()
+        
+        ws_vpo = ws_map.get(vtab_name)
+        ws_cfg = ws_map.get(cfg_tab_name)
+        
+        if not ws_vpo or not ws_cfg or not input_tab_name:
+            return
+            
+        cfg_fsns = ws_cfg.col_values(1)  # Column A (FSN)
+        num_skus = len([f for f in cfg_fsns[1:] if f and str(f).strip()])
+        if num_skus <= 0:
+            return
+            
+        max_row = num_skus + 1
+        
+        # Check current formula rows in ws_vpo
+        vpo_a_vals = ws_vpo.col_values(1)
+        vpo_row_count = len([v for v in vpo_a_vals[1:] if v and str(v).strip()])
+        
+        needs_healing = False
+        if vpo_row_count < num_skus:
+            needs_healing = True
+        else:
+            # Check for #REF! or broken formulas in sample rows
+            sample_formulas = ws_vpo.get(f"A2:K{min(max_row, 10)}", value_render_option="FORMULA")
+            for row in sample_formulas:
+                for cell in row:
+                    if "#REF!" in str(cell):
+                        needs_healing = True
+                        break
+            if not needs_healing and max_row > 10:
+                last_formulas = ws_vpo.get(f"A{max_row}:K{max_row}", value_render_option="FORMULA")
+                for row in last_formulas:
+                    for cell in row:
+                        if "#REF!" in str(cell) or not str(cell).startswith("="):
+                            needs_healing = True
+                            break
+
+        if needs_healing:
+            print(f"[AUTO-HEAL] Repairing {num_skus} formula rows in '{ws_vpo.title}' mapped to '{ws_cfg.title}' and '{input_tab_name}'...")
+            formula_rows = []
+            for r in range(2, max_row + 1):
+                formula_rows.append([
+                    f"='{cfg_tab_name}'!A{r}",
+                    f"=VLOOKUP(A{r},'{cfg_tab_name}'!A:R,18,0)",
+                    f"=VLOOKUP(A{r},'{cfg_tab_name}'!A:S,19,0)",
+                    "",
+                    f"=VLOOKUP(A{r},'{cfg_tab_name}'!A:C,3,0)",
+                    f"=VLOOKUP(A{r},'{cfg_tab_name}'!A:D,4,0)",
+                    f"=VLOOKUP(A{r},'{input_tab_name}'!C:D,2,0)",
+                    f"=VLOOKUP(A{r},'{cfg_tab_name}'!A:T,20,0)",
+                    "",
+                    f"=VLOOKUP(A{r},'{input_tab_name}'!C:G,5,0)",
+                    1,
+                ])
+            ws_vpo.update(f"A2:K{max_row}", formula_rows, value_input_option="USER_ENTERED")
+            print(f"[AUTO-HEAL] Successfully restored {len(formula_rows)} formula rows in '{ws_vpo.title}'.")
+    except Exception as e:
+        print(f"[AUTO-HEAL NOTICE] Could not verify/heal vendor PO formulas ({e})")
+
+
 # --------------------------------------------------------------------------
 # SINGLE CITY PIPELINE FUNCTION
 # --------------------------------------------------------------------------
@@ -256,6 +334,7 @@ def process_single_city(
     wait_time_sec=10,
 ):
     df_indent, date_col, cfg = load_indent_plan(client, city_code)
+    ensure_vendor_po_formulas(client, ECOM_SHEET_ID, cfg)
 
     # Date string parsing (support YYYY-MM-DD or MM/DD/YYYY)
     dt_obj = pd.to_datetime(selected_date)
@@ -575,6 +654,7 @@ def process_single_city(
             })
 
     # Save Price & Qty Audit Sheet CSV
+    os.makedirs(output_dir, exist_ok=True)
     audit_df = pd.DataFrame(audit_records)
     audit_path = os.path.join(output_dir, f"Price_and_Qty_Audit_Sheet_{city_code}_{dt_str_iso}.csv")
     try:
