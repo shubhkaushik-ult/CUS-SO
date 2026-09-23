@@ -666,8 +666,14 @@ def process_single_city(
 
     print(f"Created Price & Qty Audit Sheet: {audit_path} ({len(discrepancies)} price mismatches, {len(qty_discrepancies)} qty mismatches)")
 
-    clean_df["skuQuantity"] = clean_df["skuQuantity_num"].astype(int)
     clean_df["skuPrice"] = final_prices
+    
+    # 1. No duplicate FSN in final output
+    clean_df = clean_df.drop_duplicates(subset=[ff_col], keep="first").copy()
+    
+    # 2. Indent qty matches the final output qty
+    clean_df["skuQuantity"] = clean_df[ff_col].astype(str).str.strip().str.upper().map(indent_qty_map).fillna(0).astype(int)
+
     clean_df["skuId"] = pd.to_numeric(clean_df["skuId"], errors="coerce").astype("Int64")
     clean_df["vendorId"] = pd.to_numeric(clean_df["vendorId"], errors="coerce").astype("Int64")
     clean_df["poSubType"] = ""
