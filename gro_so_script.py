@@ -103,6 +103,17 @@ CITY_CONFIG = {
         "nlc_sheet":        "CBE FK GRO NLC",
         "cust_sheet":       "Coimbatore FK customer",
     },
+    "Jaipur": {
+        "po_prefix":        "NCXDJ",
+        "city_initial":     "J",
+        "city_id":          999,
+        "alloc_city_name":  "Jaipur",
+        "so_sheet":         "Jaipur FK GRO SO",
+        "po_sheet":         "Jaipur FK Gro PO FIle",
+        "sku_sheet":        "Jaipur GRO SKU config",
+        "nlc_sheet":        "Jaipur FK GRO NLC",
+        "cust_sheet":       "Jaipur FK Customers",
+    },
 }
 
 def get_gsheet_client(gsheet_url: str):

@@ -10,6 +10,7 @@ CITY_FACILITY_ID = {
     "Trichy":     10112,
     "Coimbatore": 10071,
     "Nashik":     10078,
+    "Jaipur":     10184,
 }
 
 _DB_PRICE_BY_NAME_QUERY = """
@@ -61,6 +62,7 @@ CITY_ID_MAP = {
     "Trichy":     102,
     "Coimbatore": 90,
     "Nashik":     8,
+    "Jaipur":     999,
 }
 
 _DB_SKU_LOOKUP_QUERY = """

@@ -562,7 +562,7 @@ def api_v1_index():
         },
         "supported_cities": [
             "Bangalore", "Chennai", "Mumbai",
-            "Hyderabad", "Trichy", "Coimbatore", "Nashik"
+            "Hyderabad", "Trichy", "Coimbatore", "Nashik", "Jaipur"
         ],
         "output_formats": {
             "standard":      "16-column GRO SO CSV format",
@@ -618,7 +618,7 @@ def api_v1_index():
                 "description": "Generate Brand Purchase Orders for a city and date. Returns vendor PO lines + audit rows.",
                 "body_type":   "multipart/form-data",
                 "fields": {
-                    "city":           "(required) City code — MUM | BLR | CHN | HYD | TRICHY | CBE | ALL",
+                    "city":           "(required) City code — MUM | BLR | CHN | HYD | TRICHY | CBE | JAI | ALL",
                     "date":           "(required) PO date YYYY-MM-DD.",
                     "exclude_direct": "(optional) true | false — exclude direct vendors. Default: false."
                 }
@@ -668,7 +668,7 @@ def api_so_types():
                         "key_fields": ["sku_id(req)", "lot_id(req)", "skuTypeId", "CustomerId"]
                     }
                 },
-                "example_cities": ["Bangalore", "Chennai", "Mumbai", "Hyderabad", "Trichy", "Coimbatore", "Nashik"]
+                "example_cities": ["Bangalore", "Chennai", "Mumbai", "Hyderabad", "Trichy", "Coimbatore", "Nashik", "Jaipur"]
             },
             {
                 "so_type":     _SO_TYPE_FNV,
@@ -680,7 +680,7 @@ def api_so_types():
                     "Response contains a per-city breakdown."
                 ),
                 "endpoint":    "POST /api/v1/fnv/process",
-                "scope":       "All cities in one request (Bangalore, Chennai, Mumbai, Hyderabad, Trichy, Coimbatore, Nashik)",
+                "scope":       "All cities in one request (Bangalore, Chennai, Mumbai, Hyderabad, Trichy, Coimbatore, Nashik, Jaipur)",
                 "satellite_cities": {
                     "Bangalore":  ["Bangalore", "Bengaluru", "Hosur", "Mandya", "Mysore", "Tumkur"],
                     "Coimbatore": ["Coimbatore", "Erode", "Palakkad", "Salem", "Tirupur"]
@@ -700,7 +700,7 @@ def api_so_types():
                 ),
                 "endpoint":    "POST /api/v1/brand-po/process",
                 "scope":       "Single city code or ALL",
-                "city_codes":  ["MUM", "BLR", "CHN", "HYD", "TRICHY", "CBE", "ALL"],
+                "city_codes":  ["MUM", "BLR", "CHN", "HYD", "TRICHY", "CBE", "JAI", "ALL"],
                 "output_fields": [
                     "vendor_name", "sku_name", "fsn", "quantity",
                     "unit_price", "total_value", "city", "delivery_date",

@@ -121,6 +121,17 @@ CITY_CONFIG = {
         "nlc_sheet":        "CBE FK GRO NLC",
         "cust_sheet":       "Coimbatore FK customer",
     },
+    "Jaipur": {
+        "po_prefix":        "NCXDJ",
+        "city_initial":     "J",
+        "city_id":          999,
+        "alloc_city_name":  "Jaipur",
+        "so_sheet":         "Jaipur FK GRO SO",
+        "po_sheet":         "Jaipur FK Gro PO FIle",
+        "sku_sheet":        "Jaipur GRO SKU config",
+        "nlc_sheet":        "Jaipur FK GRO NLC",
+        "cust_sheet":       "Jaipur FK Customers",
+    },
 }
 
 # ── FnV City config ──────────────────────────────────────────────
@@ -188,6 +199,15 @@ FNV_CITY_CONFIG = {
         "po_sheet":         "Nashik FK PO FIle",
         "cust_sheet":       "Nashik FK Customers",
     },
+    "Jaipur": {
+        "po_prefix":        "NCJAI",
+        "city_initial":     "J",
+        "city_id":          999,
+        "alloc_city_name":  "Jaipur",
+        "so_sheet":         "Jaipur FK SO",
+        "po_sheet":         "Jaipur FK PO FIle",
+        "cust_sheet":       "Jaipur FK Customers",
+    },
 }
 
 # ── FnV Satellite cities mapping ─────────────────────────────────
@@ -201,6 +221,7 @@ FNV_SATELLITE_CITIES = {
     "Trichy":     ["Trichy", "Dindigul", "Karur", "Thanjavur", "Madurai"],
     "Nashik":     ["Nashik"],
     "Hyderabad":  ["Hyderabad"],
+    "Jaipur":     ["Jaipur"],
 }
 
 

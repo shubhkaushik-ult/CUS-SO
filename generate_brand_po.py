@@ -95,6 +95,17 @@ CITY_CONFIGS = {
         "costing_tab": "CBE",
         "facility_id": 10071,
     },
+    "JAI": {
+        "city_name": "Jaipur",
+        "indent_sheet_id": "18vbeVcxVxGO80qKaujIEHeIgZDcM4SMQojMcLLV8aN4",
+        "indent_tab": "Jaipur Indent Plan",
+        "fsn_col": "Jaipur FSN",
+        "input_tab": "Jaipur FK Gro PO FIle",
+        "vendor_po_tab": "Jaipur Vendor PO ",
+        "config_tab": "Jaipur GRO SKU config",
+        "costing_tab": "JAIPUR",
+        "facility_id": 10184,
+    },
 }
 
 EXCLUDED_VENDORS = [
@@ -454,6 +465,7 @@ def process_single_city(
         "CHN": "Chennai",
         "TRICHY": "Trichy",
         "CBE": "Coimbatore",
+        "JAI": "Jaipur",
     }
     target_city_name = city_name_map.get(city_code.upper(), cfg.get("city_name", "Mumbai"))
     try:
