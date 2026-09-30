@@ -216,7 +216,7 @@ FNV_CITY_CONFIG = {
 FNV_SATELLITE_CITIES = {
     "Bangalore":  ["Bangalore", "Bengaluru", "Hosur", "Mandya", "Mysore", "Tumkur"],
     "Mumbai":     ["Mumbai"],
-    "Chennai":    ["Chennai"],
+    "Chennai":    ["Chennai", "Vellore"],
     "Coimbatore": ["Coimbatore", "Erode", "Palakkad", "Salem", "Tirupur"],
     "Trichy":     ["Trichy", "Dindigul", "Karur", "Thanjavur", "Madurai"],
     "Nashik":     ["Nashik"],
