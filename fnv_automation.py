@@ -68,6 +68,14 @@ def _drag_so_formulas_with_conn(sh, so_sheet_name: str, target_rows: int):
     try:
         sh.batch_update({"requests": [req]})
         print(f"       ✅ Formulas dragged down in '{so_sheet_name}' to cover {target_rows} rows.")
+        
+        # Clear remaining old rows below the new data
+        clear_range = f"A{target_rows + 2}:ZZ"
+        try:
+            so_ws.batch_clear([clear_range])
+            print(f"       ✅ Cleared old data below row {target_rows + 1} in '{so_sheet_name}'.")
+        except Exception as clear_e:
+            print(f"       [WARN] Could not clear old rows: {clear_e}")
     except Exception as e:
         print(f"       [WARN] Failed to auto-fill formulas in SO tab: {e}")
 
