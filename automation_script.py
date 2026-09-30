@@ -458,6 +458,13 @@ def run_automation(
     # Prioritize Store ID for PO grouping if available and not empty, fallback to Warehouse
     store_id_col = alloc["Store ID"].astype(str).str.strip() if "Store ID" in alloc.columns else alloc["Warehouse"]
     store_id_col = store_id_col.replace(["", "NAN", "nan", "None"], pd.NA).fillna(alloc["Warehouse"])
+    
+    # ── Drop duplicate FSNs for the same store/warehouse before grouping ──
+    fsn_col_dedup = next((c for c in ["FSN", "FSN/ISBN13"] if c in alloc.columns), None)
+    if fsn_col_dedup:
+        before_dedup = len(alloc)
+        alloc = alloc.drop_duplicates(subset=[fsn_col_dedup, "Store ID"], keep="first").copy()
+        print(f"       [Filter] Dropped {before_dedup - len(alloc)} duplicate FSN+Store rows.")
     alloc["Key"] = (store_id_col + alloc["Supplier_ID"]).str.upper()
 
     # Sequential PO ID per unique Key (Warehouse+SupplierID combo)
