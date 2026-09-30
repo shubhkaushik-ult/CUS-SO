@@ -633,6 +633,7 @@ async function handleFile(file, dz, fnId, onFile) {
     else if (fname.includes('hyd') || fname.includes('hyderabad')) city = 'Hyderabad';
     else if (fname.includes('try') || fname.includes('trichy') || fname.includes('madurai')) city = 'Trichy';
     else if (fname.includes('cbe') || fname.includes('coimbatore')) city = 'Coimbatore';
+    else if (fname.includes('jai') || fname.includes('jaipur')) city = 'Jaipur';
 
     const citySelect = document.getElementById(fnId === 'fn-fnv' ? 'fnv-city' : 'city') || document.getElementById('city');
     

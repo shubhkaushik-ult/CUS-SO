@@ -161,6 +161,7 @@ def detect_city():
     elif 'hyd' in filename or 'hyderabad' in filename: city = 'Hyderabad'
     elif 'try' in filename or 'trichy' in filename: city = 'Trichy'
     elif 'cbe' in filename or 'coimbatore' in filename: city = 'Coimbatore'
+    elif 'jai' in filename or 'jaipur' in filename: city = 'Jaipur'
         
     if not city:
         try:
@@ -174,6 +175,7 @@ def detect_city():
                 elif 'hyd' in first_city: city = 'Hyderabad'
                 elif 'tri' in first_city or 'try' in first_city: city = 'Trichy'
                 elif 'coim' in first_city or 'cbe' in first_city: city = 'Coimbatore'
+                elif 'jai' in first_city: city = 'Jaipur'
         except:
             pass
 
