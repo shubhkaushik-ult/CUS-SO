@@ -1306,10 +1306,11 @@ def run_fnv_automation(
 
     # Fallback to source values where Google Sheet formulas were blank/NaN/0
     if "quantity(req)" in so_df.columns:
-        so_df["quantity(req)"] = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(so_df["_source_qty"])
-        so_df["quantity(req)"] = so_df["quantity(req)"].apply(lambda q: so_df["_source_qty"] if q <= 0 else q)
+        parsed_qty = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(0)
+        so_df["quantity(req)"] = np.where(parsed_qty > 0, parsed_qty, so_df["_source_qty"])
     else:
         so_df["quantity(req)"] = so_df["_source_qty"]
+    so_df["quantity(req)"] = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(0)
 
     if "purchaseOrder" in so_df.columns:
         so_df["purchaseOrder"] = so_df["purchaseOrder"].fillna(so_df["_source_po"]).replace(["", "nan", "None", "NAN"], so_df["_source_po"])
