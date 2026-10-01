@@ -1313,12 +1313,16 @@ def run_fnv_automation(
     so_df["quantity(req)"] = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(0)
 
     if "purchaseOrder" in so_df.columns:
-        so_df["purchaseOrder"] = so_df["purchaseOrder"].fillna(so_df["_source_po"]).replace(["", "nan", "None", "NAN"], so_df["_source_po"])
+        so_df["purchaseOrder"] = so_df["purchaseOrder"].fillna("")
+        mask_empty_po = so_df["purchaseOrder"].astype(str).str.strip().isin(["", "nan", "None", "NAN", "NaN"])
+        so_df["purchaseOrder"] = np.where(mask_empty_po, so_df["_source_po"], so_df["purchaseOrder"])
     else:
         so_df["purchaseOrder"] = so_df["_source_po"]
 
     if "NC NAME" in so_df.columns:
-        so_df["NC NAME"] = so_df["NC NAME"].fillna(so_df["_source_title"]).replace(["", "nan", "None", "NAN"], so_df["_source_title"])
+        so_df["NC NAME"] = so_df["NC NAME"].fillna("")
+        mask_empty_nc = so_df["NC NAME"].astype(str).str.strip().isin(["", "nan", "None", "NAN", "NaN"])
+        so_df["NC NAME"] = np.where(mask_empty_nc, so_df["_source_title"], so_df["NC NAME"])
     else:
         so_df["NC NAME"] = so_df["_source_title"]
 
