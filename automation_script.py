@@ -1288,29 +1288,38 @@ def run_fnv_automation(
     # Replace GSheet error values
     so_df.replace(["#N/A", "#REF!", "#VALUE!", "#DIV/0!", "#NAME?", "#NUM!", "#NULL!"], np.nan, inplace=True)
 
-    # Filter blank QTY
-    # We will NOT drop missing QTY here, because we want it to go to NA tab!
-    
-    print(f"       Total QTY after fetch (before NA separation): {pd.to_numeric(so_df.get('quantity(req)'), errors='coerce').sum()}")
+    # Align so_df with upload_df row-for-row
+    N = len(upload_df)
+    if len(so_df) < N:
+        missing_count = N - len(so_df)
+        empty_rows = pd.DataFrame([{} for _ in range(missing_count)])
+        so_df = pd.concat([so_df, empty_rows], ignore_index=True)
+    elif len(so_df) > N:
+        so_df = so_df.iloc[:N].copy().reset_index(drop=True)
 
-    print("► [3/3] Separating valid and NA rows...")
-    
-    # Filter out rows if there is no FSN or no contact number (so they don't appear in NA tab)
-    if "sku_id(req)" in so_df.columns and "customer_contact_number(req)" in so_df.columns:
-        # Only drop rows where BOTH FSN and contact are blank (artifact rows from GSheet)
-        is_completely_empty = (
-            (so_df["sku_id(req)"].fillna("").astype(str).str.strip() == "") &
-            (so_df["customer_contact_number(req)"].fillna("").astype(str).str.strip() == "")
-        )
-        so_df = so_df[~is_completely_empty].copy()
+    # Attach exact metadata from upload_df to guarantee exact FSN, Title, QTY, PO Number, Store
+    so_df["_source_fsn"] = upload_df["FSN/ISBN13"].astype(str).str.strip().values
+    so_df["_source_title"] = upload_df["Title"].astype(str).str.strip().values
+    so_df["_source_qty"] = pd.to_numeric(upload_df["QTY"], errors="coerce").fillna(0).values
+    so_df["_source_po"] = upload_df["PO Number"].astype(str).str.strip().values
+    so_df["_source_store"] = upload_df["Store"].astype(str).str.strip().values
 
-    # ── Early filter: drop rows with QTY = 0 or blank immediately ──
+    # Fallback to source values where Google Sheet formulas were blank/NaN/0
     if "quantity(req)" in so_df.columns:
-        valid_qty_mask = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(0) > 0
-        dropped_zero = (~valid_qty_mask).sum()
-        if dropped_zero > 0:
-            print(f"       [Filter] Dropped {dropped_zero} rows with zero/blank QTY before NA split.")
-        so_df = so_df[valid_qty_mask].copy()
+        so_df["quantity(req)"] = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(so_df["_source_qty"])
+        so_df["quantity(req)"] = so_df["quantity(req)"].apply(lambda q: so_df["_source_qty"] if q <= 0 else q)
+    else:
+        so_df["quantity(req)"] = so_df["_source_qty"]
+
+    if "purchaseOrder" in so_df.columns:
+        so_df["purchaseOrder"] = so_df["purchaseOrder"].fillna(so_df["_source_po"]).replace(["", "nan", "None", "NAN"], so_df["_source_po"])
+    else:
+        so_df["purchaseOrder"] = so_df["_source_po"]
+
+    if "NC NAME" in so_df.columns:
+        so_df["NC NAME"] = so_df["NC NAME"].fillna(so_df["_source_title"]).replace(["", "nan", "None", "NAN"], so_df["_source_title"])
+    else:
+        so_df["NC NAME"] = so_df["_source_title"]
 
     so_df["Sales Price"] = 1
     fnv_check_cols = ["sku_id(req)", "lot_id(req)", "customer_contact_number(req)", "purchaseOrder"]
@@ -1369,14 +1378,10 @@ def run_fnv_automation(
     raw_df_na = so_df[is_na].copy()
     df_na = pd.DataFrame()
     if len(raw_df_na) > 0:
-        fsn_col = next((c for c in ["FSN", "fsn", "sku_id(req)", "SKU ID", "sku_id"] if c in raw_df_na.columns and raw_df_na[c].notna().any()), "sku_id(req)")
-        df_na["FSN"] = raw_df_na.get(fsn_col, pd.Series(dtype=str)).fillna("NA").replace("", "NA")
-        
-        title_col = next((c for c in ["NC NAME", "NC Name", "Title", "title"] if c in raw_df_na.columns and raw_df_na[c].notna().any()), "NC NAME")
-        df_na["Title"] = raw_df_na.get(title_col, pd.Series(dtype=str)).fillna("NA").replace("", "NA")
-        
-        df_na["Price"] = raw_df_na.get("Sales Price", pd.Series(dtype=str)).fillna("NA")
-        df_na["QTY"] = raw_df_na.get("quantity(req)", pd.Series(dtype=str)).fillna("NA")
+        df_na["FSN"] = raw_df_na["_source_fsn"].astype(str).str.strip()
+        df_na["Title"] = raw_df_na["_source_title"].fillna("NA").replace(["", "nan", "None"], "NA")
+        df_na["Price"] = 1
+        df_na["QTY"] = raw_df_na["_source_qty"]
         if "customer_contact_number(req)" in raw_df_na.columns:
             df_na["Contact"] = raw_df_na["customer_contact_number(req)"].fillna("Missing")
         

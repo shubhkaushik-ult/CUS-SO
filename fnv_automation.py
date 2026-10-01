@@ -312,7 +312,7 @@ def _build_upload_df(alloc, qty_series, title_series, cust_sheet, fk_site_map):
 
 # ── SO data processing (pure pandas, no network) ──────────────────
 
-def _process_so_data(so_df, alloc, delivery_date, city):
+def _process_so_data(so_df, upload_df, alloc, delivery_date, city):
     """Process the raw SO DataFrame into valid + NA rows."""
     from datetime import datetime
 
@@ -343,24 +343,41 @@ def _process_so_data(so_df, alloc, delivery_date, city):
                     so_df.rename(columns={c: target}, inplace=True)
                     break
 
-    print(f"       {len(so_df)} total rows in SO tab")
+    # Replace Google Sheet formula error strings with np.nan
     so_df.replace(["#N/A", "#REF!", "#VALUE!", "#DIV/0!", "#NAME?", "#NUM!", "#NULL!"], np.nan, inplace=True)
 
-    total_qty = pd.to_numeric(so_df.get("quantity(req)"), errors="coerce").sum()
-    print(f"       Total QTY in Google Sheet before NA separation: {total_qty}")
+    # Align so_df with upload_df row-for-row
+    N = len(upload_df)
+    if len(so_df) < N:
+        missing_count = N - len(so_df)
+        empty_rows = pd.DataFrame([{} for _ in range(missing_count)])
+        so_df = pd.concat([so_df, empty_rows], ignore_index=True)
+    elif len(so_df) > N:
+        so_df = so_df.iloc[:N].copy().reset_index(drop=True)
 
-    # Drop fully empty rows
-    if "sku_id(req)" in so_df.columns and "customer_contact_number(req)" in so_df.columns:
-        is_empty = (
-            (so_df["sku_id(req)"].fillna("").astype(str).str.strip() == "") &
-            (so_df["customer_contact_number(req)"].fillna("").astype(str).str.strip() == "")
-        )
-        so_df = so_df[~is_empty].copy()
+    # Attach exact metadata from upload_df to guarantee exact FSN, Title, QTY, PO Number, Store
+    so_df["_source_fsn"] = upload_df["FSN/ISBN13"].astype(str).str.strip().values
+    so_df["_source_title"] = upload_df["Title"].astype(str).str.strip().values
+    so_df["_source_qty"] = pd.to_numeric(upload_df["QTY"], errors="coerce").fillna(0).values
+    so_df["_source_po"] = upload_df["PO Number"].astype(str).str.strip().values
+    so_df["_source_store"] = upload_df["Store"].astype(str).str.strip().values
 
-    # Drop zero-QTY
+    # Fallback to source values where Google Sheet formulas were blank/NaN/0
     if "quantity(req)" in so_df.columns:
-        valid_qty_mask = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(0) > 0
-        so_df = so_df[valid_qty_mask].copy()
+        so_df["quantity(req)"] = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(so_df["_source_qty"])
+        so_df["quantity(req)"] = so_df["quantity(req)"].apply(lambda q: so_df["_source_qty"] if q <= 0 else q)
+    else:
+        so_df["quantity(req)"] = so_df["_source_qty"]
+
+    if "purchaseOrder" in so_df.columns:
+        so_df["purchaseOrder"] = so_df["purchaseOrder"].fillna(so_df["_source_po"]).replace(["", "nan", "None", "NAN"], so_df["_source_po"])
+    else:
+        so_df["purchaseOrder"] = so_df["_source_po"]
+
+    if "NC NAME" in so_df.columns:
+        so_df["NC NAME"] = so_df["NC NAME"].fillna(so_df["_source_title"]).replace(["", "nan", "None", "NAN"], so_df["_source_title"])
+    else:
+        so_df["NC NAME"] = so_df["_source_title"]
 
     fnv_cols = [
         "customer_contact_number(req)", "sku_id(req)", "NC NAME", "quantity(req)",
@@ -374,126 +391,88 @@ def _process_so_data(so_df, alloc, delivery_date, city):
             so_df[col] = np.nan
     so_df["Sales Price"] = 1
 
-    # NA detection (excluding Sales Price as price is always forced to 1)
-    fnv_check_cols = ["sku_id(req)", "lot_id(req)", "customer_contact_number(req)", "purchaseOrder"]
-    actual_check_cols = [c for c in fnv_check_cols if c in so_df.columns]
-    if actual_check_cols:
-        is_null = so_df[actual_check_cols].isnull().any(axis=1)
-        stripped = so_df[actual_check_cols].fillna("").astype(str).apply(lambda x: x.str.strip())
-        is_blank = (stripped == "").any(axis=1)
-        is_na_str = stripped.isin(["NA", "#N/A", "nan", "None", "na", "#n/a"]).any(axis=1)
-        is_na = is_null | is_blank | is_na_str
-    else:
-        is_na = pd.Series(False, index=so_df.index)
-
-    if "quantity(req)" in so_df.columns:
-        is_invalid_qty = so_df["quantity(req)"].isna() | (
-            pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(0) <= 0
+    # DB Enrichment for missing SKU/Lot and Contact
+    try:
+        # 1. Missing SKU / Lot ID
+        missing_sku_mask = (
+            so_df["sku_id(req)"].isna() | 
+            so_df["sku_id(req)"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "NaN"]) |
+            so_df["lot_id(req)"].isna() |
+            so_df["lot_id(req)"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "NaN"])
         )
-        is_na = is_na | is_invalid_qty
+        if missing_sku_mask.any():
+            fsns_to_lookup = [f for f in so_df.loc[missing_sku_mask, "_source_fsn"].unique() if f and str(f).strip() not in ["", "NA", "nan", "None"]]
+            if fsns_to_lookup:
+                import db_lookup
+                sku_info_map = db_lookup.fetch_skus_from_db(fsns_to_lookup, city)
+                if sku_info_map:
+                    for idx in so_df[missing_sku_mask].index:
+                        fsn = str(so_df.at[idx, "_source_fsn"]).strip()
+                        if fsn in sku_info_map:
+                            info = sku_info_map[fsn]
+                            curr_sku = str(so_df.at[idx, "sku_id(req)"]).strip()
+                            curr_lot = str(so_df.at[idx, "lot_id(req)"]).strip()
+                            if curr_sku in ["", "NA", "#N/A", "nan", "None", "NaN"] and info.get("sku_id"):
+                                so_df.at[idx, "sku_id(req)"] = str(info["sku_id"])
+                            if curr_lot in ["", "NA", "#N/A", "nan", "None", "NaN"] and info.get("lot_id"):
+                                so_df.at[idx, "lot_id(req)"] = str(info["lot_id"])
+                            if info.get("sku_name") and str(so_df.at[idx, "NC NAME"]).strip() in ["", "NA", "#N/A", "nan", "None", "NaN"]:
+                                so_df.at[idx, "NC NAME"] = info["sku_name"]
+
+        # 2. Missing Contact
+        missing_contact_mask = (
+            so_df["customer_contact_number(req)"].isna() |
+            so_df["customer_contact_number(req)"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "NaN"])
+        )
+        if missing_contact_mask.any():
+            stores_to_lookup = [s for s in so_df.loc[missing_contact_mask, "_source_store"].unique() if s and str(s).strip() not in ["", "NA", "nan", "None"]]
+            if stores_to_lookup:
+                import db_lookup
+                contact_map = db_lookup.fetch_contact_by_name(stores_to_lookup, city)
+                if contact_map:
+                    for idx in so_df[missing_contact_mask].index:
+                        store = str(so_df.at[idx, "_source_store"]).strip().lower()
+                        if store in contact_map:
+                            so_df.at[idx, "customer_contact_number(req)"] = str(contact_map[store])
+    except Exception as enrich_err:
+        print(f"       [DB WARN] Error during FnV enrichment: {enrich_err}")
+
+    # Determine NA vs Valid
+    fnv_check_cols = ["sku_id(req)", "lot_id(req)", "customer_contact_number(req)", "purchaseOrder"]
+    is_null = so_df[fnv_check_cols].isnull().any(axis=1)
+    stripped = so_df[fnv_check_cols].fillna("").astype(str).apply(lambda x: x.str.strip())
+    is_blank = (stripped == "").any(axis=1)
+    is_na_str = stripped.isin(["NA", "#N/A", "nan", "None", "na", "#n/a", "missing", "MISSING"]).any(axis=1)
+    is_invalid_qty = pd.to_numeric(so_df["quantity(req)"], errors="coerce").fillna(0) <= 0
+    is_na = is_null | is_blank | is_na_str | is_invalid_qty
 
     # Date formatting
     if "delivery_date(DD-MM-YYY)" in so_df.columns:
         so_df["delivery_date(DD-MM-YYY)"] = pd.to_datetime(
             so_df["delivery_date(DD-MM-YYY)"], errors="coerce"
         ).dt.date
-    if so_df["delivery_date(DD-MM-YYY)"].isna().all():
+    if "delivery_date(DD-MM-YYY)" not in so_df.columns or so_df["delivery_date(DD-MM-YYY)"].isna().all():
         from datetime import datetime as _dt
-        so_df["delivery_date(DD-MM-YYY)"] = _dt.strptime(delivery_date, "%d-%m-%Y").date()
+        try:
+            so_df["delivery_date(DD-MM-YYY)"] = _dt.strptime(delivery_date, "%d-%m-%Y").date()
+        except:
+            so_df["delivery_date(DD-MM-YYY)"] = delivery_date
 
     df_valid = so_df[~is_na][fnv_cols].copy()
     raw_df_na = so_df[is_na].copy()
 
     df_na = pd.DataFrame()
     if len(raw_df_na) > 0:
-        fsn_col = next(
-            (c for c in ["sku_id(req)", "SKU ID", "sku_id", "FSN", "fsn"]
-             if c in raw_df_na.columns and raw_df_na[c].notna().any()), "sku_id(req)"
-        )
-        df_na["FSN"] = raw_df_na.get(fsn_col, pd.Series(dtype=str)).fillna("NA").replace("", "NA")
-        title_col = next(
-            (c for c in ["NC NAME", "NC Name", "Title", "title"]
-             if c in raw_df_na.columns and raw_df_na[c].notna().any()), "NC NAME"
-        )
-        df_na["Title"] = raw_df_na.get(title_col, pd.Series(dtype=str)).fillna("NA").replace("", "NA")
-        df_na["Price"] = raw_df_na.get("Sales Price", pd.Series(dtype=str)).fillna("NA")
-        df_na["QTY"] = raw_df_na.get("quantity(req)", pd.Series(dtype=str)).fillna("NA")
+        df_na["FSN"] = raw_df_na["_source_fsn"].astype(str).str.strip()
+        df_na["Title"] = raw_df_na["_source_title"].fillna("NA").replace(["", "nan", "None"], "NA")
+        df_na["Price"] = 1
+        df_na["QTY"] = raw_df_na["_source_qty"]
         df_na = df_na.drop_duplicates()
-
-        # Fill title from alloc
-        alloc_fsn_col = next((c for c in alloc.columns if str(c).strip().lower() in ["fsn", "fsn/isbn13"]), None)
-        alloc_title_col = next(
-            (c for c in alloc.columns if str(c).strip().lower() in ["fsn_title", "title", "nc name", "nc_name"]), None
-        )
-        if alloc_fsn_col and alloc_title_col:
-            def normalize_title(title_str):
-                import re
-                t = str(title_str).strip().lower()
-                return re.sub(r'\s*-?\s*fk$', '', t).strip()
-
-            alloc_title_map = (
-                alloc[[alloc_fsn_col, alloc_title_col]]
-                .dropna(subset=[alloc_fsn_col])
-                .drop_duplicates(subset=[alloc_fsn_col])
-                .set_index(alloc_fsn_col)[alloc_title_col]
-                .to_dict()
-            )
-            def _fill_title(row):
-                if str(row["Title"]).strip() in ("", "NA", "#N/A"):
-                    return alloc_title_map.get(str(row["FSN"]).strip(), row["Title"])
-                return row["Title"]
-            df_na["Title"] = df_na.apply(_fill_title, axis=1)
-            filled = (df_na["Title"].astype(str).str.strip() != "NA").sum()
-            print(f"       [Alloc] Filled Title for {filled} NA rows from Allocation file.")
-
-            # Reverse map: Title -> FSN (normalized)
-            alloc_title_to_fsn_map = {}
-            for _, r in alloc[[alloc_title_col, alloc_fsn_col]].dropna(subset=[alloc_title_col]).drop_duplicates(subset=[alloc_title_col]).iterrows():
-                norm_key = normalize_title(r[alloc_title_col])
-                alloc_title_to_fsn_map[norm_key] = r[alloc_fsn_col]
-
-            def _fill_fsn(row):
-                t = normalize_title(row["Title"])
-                if t in alloc_title_to_fsn_map:
-                    return alloc_title_to_fsn_map[t]
-                # Try substring matching as a fallback
-                for key, fsn_val in alloc_title_to_fsn_map.items():
-                    if key in t or t in key:
-                        return fsn_val
-                # Try difflib fuzzy matching as a final fallback
-                import difflib
-                matches = difflib.get_close_matches(t, alloc_title_to_fsn_map.keys(), n=1, cutoff=0.7)
-                if matches:
-                    return alloc_title_to_fsn_map[matches[0]]
-                return row["FSN"]
-            
-            df_na["FSN"] = df_na.apply(_fill_fsn, axis=1)
-            filled_fsn = (df_na["FSN"].astype(str).str.strip() != "NA").sum()
-            print(f"       [Alloc] Updated FSN for {filled_fsn} NA rows from Allocation file.")
-
-        # DB price lookup
-        need_price_mask = df_na["Price"].astype(str).str.strip().isin(["", "NA", "#N/A", "nan", "None", "0", "0.0"])
-        names_for_db = df_na.loc[
-            need_price_mask & ~df_na["Title"].astype(str).str.strip().isin(["", "NA", "#N/A"]),
-            "Title"
-        ].tolist()
-        if names_for_db:
-            try:
-                import db_lookup
-                price_map = db_lookup.fetch_price_by_name(names_for_db, city)
-                if price_map:
-                    def _fill_price(row):
-                        if str(row["Price"]).strip() in ("", "NA", "#N/A", "nan", "None", "0", "0.0"):
-                            return price_map.get(str(row["Title"]).strip().lower(), row["Price"])
-                        return row["Price"]
-                    df_na["Price"] = df_na.apply(_fill_price, axis=1)
-            except Exception as db_err:
-                print(f"       [DB WARN] Could not fetch price from DB: {db_err}")
 
     print(f"       ✓ Valid rows : {len(df_valid)}")
     print(f"       ✗ NA rows    : {len(df_na)} (distinct)")
     print(f"       ✓ Valid QTY  : {pd.to_numeric(df_valid.get('quantity(req)'), errors='coerce').sum()}")
-    print(f"       ✗ NA QTY     : {pd.to_numeric(raw_df_na.get('quantity(req)'), errors='coerce').sum()}")
+    print(f"       ✗ NA QTY     : {pd.to_numeric(raw_df_na.get('_source_qty', raw_df_na.get('quantity(req)')), errors='coerce').sum()}")
 
     return df_valid, df_na, len(so_df)
 
@@ -632,6 +611,7 @@ def process_all_fnv_cities(fnv_alloc_path=None, delivery_date=None, gsheet_url=N
 
             city_prepared[city] = {
                 "alloc": alloc,
+                "upload_df": upload_df,
                 "key_table": key_table,
                 "unique_keys": unique_keys,
                 "so_sheet": so_sheet_name,
@@ -666,7 +646,7 @@ def process_all_fnv_cities(fnv_alloc_path=None, delivery_date=None, gsheet_url=N
                 # Fetch only up to the number of rows uploaded + 1 for header
                 so_df = _fetch_so_tab_with_conn(sh, prep["so_sheet"], max_rows=prep["upload_rows"] + 1)
                 df_valid, df_na, total_so = _process_so_data(
-                    so_df, prep["alloc"], delivery_date, city
+                    so_df, prep["upload_df"], prep["alloc"], delivery_date, city
                 )
                 csv_path, inst_csv_path, xlsx_path, po_path = _save_outputs(
                     df_valid, df_na, prep["key_table"], delivery_date, city, prep["output_dir"]
