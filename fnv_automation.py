@@ -81,21 +81,32 @@ def _drag_so_formulas_with_conn(sh, so_sheet_name: str, target_rows: int):
 
 
 def _fetch_so_tab_with_conn(sh, so_sheet_name: str, max_rows: int = None) -> pd.DataFrame:
-    """Fetch SO tab data using an existing connection."""
+    """Fetch SO tab data using an existing connection with robust row padding."""
     try:
         worksheet = get_worksheet_flexible(sh, so_sheet_name)
     except Exception as e:
         raise ValueError(f"Could not find tab '{so_sheet_name}': {e}")
     
     if max_rows:
-        # Fetch only the range containing active data to speed up API retrieval significantly
         data = worksheet.get(f"A1:Z{max_rows}")
     else:
         data = worksheet.get_all_values()
         
-    if not data:
+    if not data or len(data) < 1:
         return pd.DataFrame()
-    return pd.DataFrame(data[1:], columns=data[0])
+
+    headers = [str(c).strip() for c in data[0]]
+    num_cols = len(headers)
+    
+    rows = []
+    for r in data[1:]:
+        if len(r) < num_cols:
+            padded_r = list(r) + [""] * (num_cols - len(r))
+        else:
+            padded_r = list(r[:num_cols])
+        rows.append(padded_r)
+        
+    return pd.DataFrame(rows, columns=headers)
 
 
 def _fetch_cust_sheet_with_conn(sh, cust_sheet: str) -> dict:
@@ -105,7 +116,17 @@ def _fetch_cust_sheet_with_conn(sh, cust_sheet: str) -> dict:
         cust_data = cust_ws.get_all_values()
         if len(cust_data) < 2:
             return {}
-        cust_df = pd.DataFrame(cust_data[1:], columns=cust_data[0])
+        headers = [str(c).strip() for c in cust_data[0]]
+        num_cols = len(headers)
+        rows = []
+        for r in cust_data[1:]:
+            if len(r) < num_cols:
+                padded_r = list(r) + [""] * (num_cols - len(r))
+            else:
+                padded_r = list(r[:num_cols])
+            rows.append(padded_r)
+
+        cust_df = pd.DataFrame(rows, columns=headers)
         wh_code_possibles = ["wh code", "fk site id", "customer code", "site id", "store id"]
         fk_site_possibles = ["fk site name", "customer name", "site name", "store name", "nc name"]
         wh_name_possibles = ["wh name", "warehouse name", "store"]
@@ -310,39 +331,41 @@ def _build_upload_df(alloc, qty_series, title_series, cust_sheet, fk_site_map):
     return upload_df, num_rows
 
 
+def _normalize_so_columns(df: pd.DataFrame):
+    """Normalize Google Sheet SO tab column names regardless of casing, spaces, or parentheses."""
+    import re
+    clean_map = {}
+    for col in df.columns:
+        norm = re.sub(r'[^a-zA-Z0-9]', '', str(col)).lower()
+        if norm in ['customercontactnumberreq', 'customercontactnumber', 'customercontact', 'contact', 'phone', 'phonenumber']:
+            clean_map[col] = 'customer_contact_number(req)'
+        elif norm in ['skuidreq', 'skuid', 'ncid', 'sku', 'ncidreq', 'fsn']:
+            clean_map[col] = 'sku_id(req)'
+        elif norm in ['ncname', 'title', 'skuname', 'productname']:
+            clean_map[col] = 'NC NAME'
+        elif norm in ['quantityreq', 'quantity', 'qty']:
+            clean_map[col] = 'quantity(req)'
+        elif norm in ['lotidreq', 'lotid', 'lotweightid', 'lotweightidreq', 'lot']:
+            clean_map[col] = 'lot_id(req)'
+        elif norm in ['purchaseorder', 'purchaseorderreq', 'ponumber', 'poid', 'po']:
+            clean_map[col] = 'purchaseOrder'
+        elif norm in ['salesprice', 'price']:
+            clean_map[col] = 'Sales Price'
+        elif norm in ['deliverydateddmmyyy', 'deliverydateddmmyyyy', 'deliverydate', 'date']:
+            clean_map[col] = 'delivery_date(DD-MM-YYY)'
+        elif norm in ['cityidreq', 'cityid', 'city']:
+            clean_map[col] = 'CITY_ID(req)'
+    if clean_map:
+        df.rename(columns=clean_map, inplace=True)
+
+
 # ── SO data processing (pure pandas, no network) ──────────────────
 
 def _process_so_data(so_df, upload_df, alloc, delivery_date, city):
     """Process the raw SO DataFrame into valid + NA rows."""
     from datetime import datetime
 
-    so_df.columns = so_df.columns.str.strip()
-
-    for c in ["SKU ID", "sku_id", "FSN", "fsn"]:
-        if c in so_df.columns and "sku_id(req)" not in so_df.columns:
-            so_df.rename(columns={c: "sku_id(req)"}, inplace=True)
-            break
-    for c in ["NC Name", "Title", "title"]:
-        if c in so_df.columns and "NC NAME" not in so_df.columns:
-            so_df.rename(columns={c: "NC NAME"}, inplace=True)
-            break
-
-    col_mappings = {
-        "customer_contact_number(req)": ["Customer Contact Number", "customer contact", "contact", "phone"],
-        "quantity(req)": ["QTY", "Quantity", "qty", "quantity"],
-        "lot_id(req)": ["Lot ID", "lot_id", "lot id", "lot weight ID", "lot weight id"],
-        "purchaseOrder": ["PO Number", "PO ID", "PO", "purchase_order", "purchase order"],
-        "Sales Price": ["Price", "Sales price", "price"],
-        "delivery_date(DD-MM-YYY)": ["Delivery Date", "delivery date", "delivery_date"],
-        "CITY_ID(req)": ["CITY_ID", "City ID", "City", "city_id"],
-    }
-    for target, candidates in col_mappings.items():
-        if target not in so_df.columns:
-            for c in so_df.columns:
-                if c.strip().lower() in [cand.lower() for cand in candidates]:
-                    so_df.rename(columns={c: target}, inplace=True)
-                    break
-
+    _normalize_so_columns(so_df)
     # Replace Google Sheet formula error strings with np.nan
     so_df.replace(["#N/A", "#REF!", "#VALUE!", "#DIV/0!", "#NAME?", "#NUM!", "#NULL!"], np.nan, inplace=True)
 
