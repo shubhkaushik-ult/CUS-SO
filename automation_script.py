@@ -1255,8 +1255,8 @@ def run_fnv_automation(
 
     so_df.columns = so_df.columns.str.strip()
     
-    # Normalize FSN and Title columns to standard names if they differ
-    for c in ["SKU ID", "sku_id", "FSN", "fsn"]:
+    # Normalize SKU ID and Title columns to standard names if they differ
+    for c in ["SKU ID", "sku_id", "NC ID", "nc_id"]:
         if c in so_df.columns and "sku_id(req)" not in so_df.columns:
             so_df.rename(columns={c: "sku_id(req)"}, inplace=True)
             break

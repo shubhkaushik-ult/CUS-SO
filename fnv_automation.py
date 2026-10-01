@@ -339,7 +339,7 @@ def _normalize_so_columns(df: pd.DataFrame):
         norm = re.sub(r'[^a-zA-Z0-9]', '', str(col)).lower()
         if norm in ['customercontactnumberreq', 'customercontactnumber', 'customercontact', 'contact', 'phone', 'phonenumber']:
             clean_map[col] = 'customer_contact_number(req)'
-        elif norm in ['skuidreq', 'skuid', 'ncid', 'sku', 'ncidreq', 'fsn']:
+        elif norm in ['skuidreq', 'skuid', 'ncid', 'sku', 'ncidreq']:
             clean_map[col] = 'sku_id(req)'
         elif norm in ['ncname', 'title', 'skuname', 'productname']:
             clean_map[col] = 'NC NAME'
