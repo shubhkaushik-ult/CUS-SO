@@ -62,7 +62,7 @@ CITY_ID_MAP = {
     "Trichy":     102,
     "Coimbatore": 90,
     "Nashik":     8,
-    "Jaipur":     999,
+    "Jaipur":     124,
 }
 
 _DB_SKU_LOOKUP_QUERY = """

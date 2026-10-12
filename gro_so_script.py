@@ -106,7 +106,7 @@ CITY_CONFIG = {
     "Jaipur": {
         "po_prefix":        "NCXDJ",
         "city_initial":     "J",
-        "city_id":          999,
+        "city_id":          124,
         "alloc_city_name":  "Jaipur",
         "so_sheet":         "Jaipur FK GRO SO",
         "po_sheet":         "Jaipur FK Gro PO FIle",

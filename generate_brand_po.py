@@ -100,7 +100,7 @@ CITY_CONFIGS = {
         "indent_sheet_id": "18vbeVcxVxGO80qKaujIEHeIgZDcM4SMQojMcLLV8aN4",
         "indent_tab": "Jaipur Indent Plan",
         "fsn_col": "Jaipur FSN",
-        "input_tab": "Jaipur FK Gro PO FIle",
+        "input_tab": "Jaipur PO Input",
         "vendor_po_tab": "Jaipur Vendor PO ",
         "config_tab": "Jaipur GRO SKU config",
         "costing_tab": "JAIPUR",
