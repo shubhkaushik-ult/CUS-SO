@@ -307,11 +307,28 @@ def get_gsheet_client(gsheet_url: str):
         
 
 def get_worksheet_flexible(sh, target_name):
-    target = target_name.strip().lower()
-    for ws in sh.worksheets():
+    """Find worksheet with exact, trimmed, case-insensitive, or normalized whitespace match."""
+    target = str(target_name).strip().lower()
+    worksheets = sh.worksheets()
+    # 1. Exact match
+    for ws in worksheets:
+        if ws.title == target_name:
+            return ws
+    # 2. Case-insensitive and trimmed match
+    for ws in worksheets:
         if ws.title.strip().lower() == target:
             return ws
-    raise ValueError(f"Could not find a tab named '{target_name}' in the Google Sheet. Please check the spelling and trailing spaces.")
+    # 3. Normalized whitespace match
+    target_clean = " ".join(target.split())
+    for ws in worksheets:
+        if " ".join(ws.title.strip().lower().split()) == target_clean:
+            return ws
+    # 4. Partial / fuzzy match
+    for ws in worksheets:
+        t_clean = ws.title.strip().lower()
+        if target in t_clean or t_clean in target:
+            return ws
+    raise ValueError(f"Could not find a tab named '{target_name}' in the Google Sheet. Available tabs: {[w.title for w in worksheets]}")
 
 def update_gsheet_po_file(gsheet_url: str, po_sheet_name: str, df: pd.DataFrame):
     """Clear the PO tab and upload the new Allocation data."""
@@ -519,12 +536,16 @@ def run_automation(
             upload_df["QTY"] = ""
             
         cust_sheet = cfg.get("cust_sheet", "BLR FK Customers")
+        actual_cust_sheet = cust_sheet
+        fk_contact_map = {}
+        wh_contact_map = {}
         
         # Fetch the customer sheet to get the FK Site Name mapping
         print(f"       Fetching '{cust_sheet}' to map FK Site Name...")
         try:
             cust_sh, _ = get_gsheet_client(gsheet_url)
             cust_ws = get_worksheet_flexible(cust_sh, cust_sheet)
+            actual_cust_sheet = cust_ws.title
             cust_data = cust_ws.get_all_values()
             
             if len(cust_data) > 1:
@@ -536,6 +557,7 @@ def run_automation(
                 wh_code_col = next((c for c in cust_df.columns if str(c).strip().lower() in wh_code_possibles), None)
                 fk_site_col = next((c for c in cust_df.columns if str(c).strip().lower() in fk_site_possibles), None)
                 wh_name_col = next((c for c in cust_df.columns if str(c).strip().lower() in wh_name_possibles), None)
+                contact_col = next((c for c in cust_df.columns if str(c).strip().lower() in ["contactnumber", "contact number", "contact", "phone"]), None)
                 
                 fk_site_map = {}
                 if fk_site_col:
@@ -545,11 +567,18 @@ def run_automation(
                     if wh_name_col:
                         raw_map_2 = cust_df.set_index(wh_name_col)[fk_site_col].to_dict()
                         fk_site_map.update({str(k).strip().lower(): v for k, v in raw_map_2.items() if str(v).strip() not in ["", "nan", "None", "NAN"]})
+
+                if contact_col:
+                    if fk_site_col:
+                        fk_contact_map = {str(k).strip().lower(): str(v).strip() for k, v in cust_df.set_index(fk_site_col)[contact_col].dropna().to_dict().items() if str(v).strip() not in ["", "nan", "None", "0", "NAN"]}
+                    if wh_code_col:
+                        wh_contact_map = {str(k).strip().lower(): str(v).strip() for k, v in cust_df.set_index(wh_code_col)[contact_col].dropna().to_dict().items() if str(v).strip() not in ["", "nan", "None", "0", "NAN"]}
             else:
                 fk_site_map = {}
         except Exception as e:
             print(f"       [WARN] Failed to fetch customer sheet mapping: {e}")
             fk_site_map = {}
+            actual_cust_sheet = cust_sheet
 
         upload_df["PO Number"] = alloc["PO_ID_generated"]
         _store_fallback = alloc["Store ID"].astype(str).str.strip() if "Store ID" in alloc.columns else alloc["Warehouse"]
@@ -569,8 +598,8 @@ def run_automation(
         print(f"       {num_rows_uploaded} rows to upload (including missing qty/po ids)")
         upload_df = upload_df.reset_index(drop=True)
         
-        # Inject dynamic VLOOKUP formula for the Contact column
-        upload_df["Contact"] = [f"=VLOOKUP(E{i},'{cust_sheet}'!F:G,2,0)" for i in range(2, len(upload_df) + 2)]
+        # Inject dynamic VLOOKUP formula for the Contact column using exact tab name from Google Sheet
+        upload_df["Contact"] = [f"=VLOOKUP(E{i},'{actual_cust_sheet}'!F:G,2,0)" for i in range(2, len(upload_df) + 2)]
         
         update_gsheet_po_file(gsheet_url, po_sheet_name, upload_df)
         
@@ -677,6 +706,47 @@ def run_automation(
 
     if "customer_contact_number(req)" in so_df.columns:
         so_df["customer_contact_number(req)"] = so_df["customer_contact_number(req)"].apply(parse_contact)
+
+        # Backfill any contact numbers that came back as NaN / #REF! / #N/A from Google Sheets
+        missing_contact_mask = (
+            so_df["customer_contact_number(req)"].isna() |
+            so_df["customer_contact_number(req)"].astype(str).str.strip().isin(["", "nan", "None", "NaN", "#REF!", "#N/A", "0"])
+        )
+        if missing_contact_mask.any():
+            # 1. In-memory customer sheet map
+            for idx in so_df[missing_contact_mask].index:
+                store_val = str(upload_df.at[idx, "Store"] if idx < len(upload_df) else "").strip().lower()
+                wh_val = str(alloc.at[idx, "Warehouse"] if idx < len(alloc) else "").strip().lower()
+                c_num = fk_contact_map.get(store_val) or wh_contact_map.get(wh_val) or fk_contact_map.get(wh_val)
+                if c_num:
+                    so_df.at[idx, "customer_contact_number(req)"] = parse_contact(c_num)
+
+            # 2. Database fallback via db_lookup
+            still_missing = (
+                so_df["customer_contact_number(req)"].isna() |
+                so_df["customer_contact_number(req)"].astype(str).str.strip().isin(["", "nan", "None", "NaN", "#REF!", "#N/A", "0"])
+            )
+            if still_missing.any():
+                try:
+                    import db_lookup
+                    stores_to_lookup = []
+                    for idx in so_df[still_missing].index:
+                        s = str(upload_df.at[idx, "Store"] if idx < len(upload_df) else "").strip()
+                        w = str(alloc.at[idx, "Warehouse"] if idx < len(alloc) else "").strip()
+                        if s and s not in ["", "nan", "None"]: stores_to_lookup.append(s)
+                        if w and w not in ["", "nan", "None"]: stores_to_lookup.append(w)
+                    if stores_to_lookup:
+                        db_contacts = db_lookup.fetch_contact_by_name(list(set(stores_to_lookup)), city)
+                        if db_contacts:
+                            for idx in so_df[still_missing].index:
+                                s = str(upload_df.at[idx, "Store"] if idx < len(upload_df) else "").strip().lower()
+                                w = str(alloc.at[idx, "Warehouse"] if idx < len(alloc) else "").strip().lower()
+                                if s in db_contacts:
+                                    so_df.at[idx, "customer_contact_number(req)"] = parse_contact(db_contacts[s])
+                                elif w in db_contacts:
+                                    so_df.at[idx, "customer_contact_number(req)"] = parse_contact(db_contacts[w])
+                except Exception as e:
+                    print(f"       [DB NOTICE] Contact fallback notice: {e}")
 
     # Ensure date column is formatted correctly to DD-MM-YYYY
     if "Date" in so_df.columns:
@@ -1179,12 +1249,14 @@ def run_fnv_automation(
             title_series = pd.Series("", index=alloc.index)
 
         cust_sheet = cfg.get("cust_sheet", "BLR FK Customers")
+        actual_cust_sheet = cust_sheet
         
         # Fetch the customer sheet to get the FK Site Name mapping
         print(f"       Fetching '{cust_sheet}' to map FK Site Name...")
         try:
             cust_sh, _ = get_gsheet_client(gsheet_url)
             cust_ws = get_worksheet_flexible(cust_sh, cust_sheet)
+            actual_cust_sheet = cust_ws.title
             cust_data = cust_ws.get_all_values()
             
             if len(cust_data) > 1:
@@ -1210,6 +1282,7 @@ def run_fnv_automation(
         except Exception as e:
             print(f"       [WARN] Failed to fetch customer sheet mapping: {e}")
             fk_site_map = {}
+            actual_cust_sheet = cust_sheet
 
         _store_fallback = alloc["Store ID"].astype(str).str.strip() if "Store ID" in alloc.columns else alloc["Warehouse"]
         _store_fallback = _store_fallback.replace(["", "NAN", "nan", "None"], pd.NA).fillna(alloc["Warehouse"])
@@ -1236,9 +1309,9 @@ def run_fnv_automation(
         num_rows_uploaded = len(upload_df)
         print(f"       {num_rows_uploaded} rows to upload (including missing qty/po ids)")
 
-        # Add VLOOKUP contact formula (row numbers reset after filter)
+        # Add VLOOKUP contact formula using exact tab name from Google Sheet
         upload_df = upload_df.reset_index(drop=True)
-        upload_df["Contact"] = [f"=VLOOKUP(E{i},'{cust_sheet}'!F:G,2,0)" for i in range(2, len(upload_df) + 2)]
+        upload_df["Contact"] = [f"=VLOOKUP(E{i},'{actual_cust_sheet}'!F:G,2,0)" for i in range(2, len(upload_df) + 2)]
 
         update_gsheet_po_file(gsheet_url, po_sheet_name, upload_df)
         

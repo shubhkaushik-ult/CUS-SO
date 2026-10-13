@@ -109,13 +109,15 @@ def _fetch_so_tab_with_conn(sh, so_sheet_name: str, max_rows: int = None) -> pd.
     return pd.DataFrame(rows, columns=headers)
 
 
-def _fetch_cust_sheet_with_conn(sh, cust_sheet: str) -> dict:
+def _fetch_cust_sheet_with_conn(sh, cust_sheet: str):
     """Fetch the customer sheet to build FK Site Name mapping using an existing connection."""
+    actual_cust_sheet = cust_sheet
     try:
         cust_ws = get_worksheet_flexible(sh, cust_sheet)
+        actual_cust_sheet = cust_ws.title
         cust_data = cust_ws.get_all_values()
         if len(cust_data) < 2:
-            return {}
+            return {}, actual_cust_sheet
         headers = [str(c).strip() for c in cust_data[0]]
         num_cols = len(headers)
         rows = []
@@ -151,10 +153,10 @@ def _fetch_cust_sheet_with_conn(sh, cust_sheet: str) -> dict:
                     for k, v in raw_map_2.items()
                     if str(v).strip() not in ["", "nan", "None", "NAN"]
                 })
-        return fk_site_map
+        return fk_site_map, actual_cust_sheet
     except Exception as e:
         print(f"       [WARN] Failed to fetch customer sheet mapping: {e}")
-        return {}
+        return {}, actual_cust_sheet
 
 
 def _smart_read_excel(path: str) -> pd.DataFrame:
@@ -626,10 +628,10 @@ def process_all_fnv_cities(fnv_alloc_path=None, delivery_date=None, gsheet_url=N
 
             cust_sheet = cfg.get("cust_sheet", "BLR FK Customers")
             print(f"  ► [{city}] Fetching customer mapping from '{cust_sheet}'...")
-            fk_site_map = _fetch_cust_sheet_with_conn(sh, cust_sheet)
+            fk_site_map, actual_cust_sheet = _fetch_cust_sheet_with_conn(sh, cust_sheet)
 
             upload_df, num_rows = _build_upload_df(
-                alloc, qty_series, title_series, cust_sheet, fk_site_map
+                alloc, qty_series, title_series, actual_cust_sheet, fk_site_map
             )
             print(f"  ► [{city}] Writing {num_rows} rows → PO tab '{po_sheet_name}'...")
             _update_po_tab_with_conn(sh, po_sheet_name, upload_df)

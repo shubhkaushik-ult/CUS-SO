@@ -478,7 +478,7 @@ async function runAutomation() {
     setProgress(45);
     
     let storeToContact = {};
-    const custSheetName = soData.wb.SheetNames.find(s => s.toLowerCase() === cfg.custName.toLowerCase()) || cfg.custName;
+    const custSheetName = soData.wb.SheetNames.find(s => s.trim().toLowerCase() === cfg.custName.trim().toLowerCase()) || cfg.custName;
     if (soData.wb.Sheets[custSheetName]) {
       const custRows = XLSX.utils.sheet_to_json(soData.wb.Sheets[custSheetName], { header: 1 });
       let mappedCount = 0;
